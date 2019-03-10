@@ -263,17 +263,17 @@ sns_ddf_status_e qmp6988_get_calib_param()
 		QMP6988_MSG_0(HIGH, "qmp6988_get_calib_param qmp6988_read_reg fail\n");
 	}
 
-	qmp6988_cali.COE_a0 = (QMP6988_S32_t)(((a_data_u8r[18] << SHIFT_LEFT_12_POSITION) \
-								| (a_data_u8r[19] << SHIFT_LEFT_4_POSITION) \
-								| (a_data_u8r[24] & 0x0f))<<12);
+	qmp6988_cali.COE_a0 = (QMP6988_S32_t)(((QMP6988_S32_t)a_data_u8r[18]<<SHIFT_LEFT_12_POSITION) \
+							| ((QMP6988_S32_t)a_data_u8r[19]<<SHIFT_LEFT_4_POSITION) \
+							| ((QMP6988_S32_t)a_data_u8r[24]&0x0f))<<12;
 	qmp6988_cali.COE_a0 = qmp6988_cali.COE_a0>>12;
 
 	qmp6988_cali.COE_a1 = (QMP6988_S16_t)(((a_data_u8r[20]) << SHIFT_LEFT_8_POSITION) | a_data_u8r[21]);
 	qmp6988_cali.COE_a2 = (QMP6988_S16_t)(((a_data_u8r[22]) << SHIFT_LEFT_8_POSITION) | a_data_u8r[23]);
 		
-	qmp6988_cali.COE_b00 = (QMP6988_S32_t)(((a_data_u8r[0] << SHIFT_LEFT_12_POSITION) \
-								| (a_data_u8r[1] << SHIFT_LEFT_4_POSITION) \
-								| ((a_data_u8r[24] & 0xf0) >> SHIFT_RIGHT_4_POSITION))<<12);
+	qmp6988_cali.COE_b00 = (QMP6988_S32_t)(((QMP6988_S32_t)a_data_u8r[0]<<SHIFT_LEFT_12_POSITION) \
+							| ((QMP6988_S32_t)a_data_u8r[1]<<SHIFT_LEFT_4_POSITION) \
+							| (((QMP6988_S32_t)a_data_u8r[24]&0xf0)>>SHIFT_RIGHT_4_POSITION))<<12;;
 	qmp6988_cali.COE_b00 = qmp6988_cali.COE_b00>>12;
 
 	qmp6988_cali.COE_bt1 = (QMP6988_S16_t)(((a_data_u8r[2]) << SHIFT_LEFT_8_POSITION) | a_data_u8r[3]);

@@ -13,29 +13,37 @@
  *
  */
  
-#include "./qmaX981/qmaX981.h"
-#include "./usart/bsp_usart.h"
-#include "./i2c/bsp_i2c.h"
-#include <stdbool.h>
-#include <string.h>
+#include <accel.h>
+#include <cust_acc.h>
+
+#include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_irq.h>
+#include <linux/gpio.h>
+
+#include <asm/io.h>
+#include <linux/sched.h>
+#include "qmaX981.h"
 
 #if defined(QMAX981_STEP_COUNTER)
 
-//#define QMAX981_ALGO_DEBUG
+#define QMAX981_ALGO_DEBUG
 #ifdef QMAX981_ALGO_DEBUG
 #define QMAX981_TAG                  "[QMAX981_algo] "
-#define QMAX981_ERR(fmt, args...)    console_write(QMAX981_TAG "%s %d : " fmt, __FUNCTION__, __LINE__, ##args)
-#define QMAX981_FUN(f)               console_write(QMAX981_TAG "%s\n", __FUNCTION__)
+#define QMAX981_ERR(fmt, args...)    printk(QMAX981_TAG "%s %d : " fmt, __FUNCTION__, __LINE__, ##args)
+#define QMAX981_FUN(f)               printk(QMAX981_TAG "%s\n", __FUNCTION__)
 //#define QMAX981_LOG(fmt, args...)    pr_debug(QMAX981_TAG "%s %d : " fmt, __FUNCTION__, __LINE__, ##args)
-#define QMAX981_LOG(fmt, args...)    console_write(QMAX981_TAG "%s %d : " fmt, __FUNCTION__, __LINE__, ##args)
+#define QMAX981_LOG(fmt, args...)    printk(QMAX981_TAG "%s %d : " fmt, __FUNCTION__, __LINE__, ##args)
 #else
 #define QMAX981_ERR(fmt, args...)    do {} while (0)
 #define QMAX981_FUN(f)               do {} while (0)
 #define QMAX981_LOG(fmt, args...)    do {} while (0)
 #endif
 
-extern u8 qmaX981_writereg(u8 reg_add,u8 reg_dat);
-extern u8 qmaX981_readreg(u8 reg_add,u8 *buf,u8 num);
+extern int qmaX981_TxData(char *txData, int length);
+extern int qmaX981_RxData(char *rxData, int length);
+extern int qmaX981_read_step(int *data);
+
 
 typedef enum
 {
@@ -245,34 +253,35 @@ int qmaX981_step_debounce_read_data(int result)
 int qmaX981_check_abnormal_data(int data_in, int *data_out)
 {
 	int ret = 0;
+	int step_num;
 	int diff;
-	unsigned char data[2];
+	//unsigned char data[2];
 
 	g_qmaX981_data_c.curr_data = data_in;
 	diff = QMA6981_DIFF(g_qmaX981_data_c.curr_data, g_qmaX981_data_c.last_data);
 	if(diff > QMAX981_ABNORMAL_DIFF)
 	{
 		// read data 1
-		ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
-		if(ret == 0)
+		ret = qmaX981_read_step(&step_num);
+		if(ret)
 			g_qmaX981_data_c.more_data[0] = -1;
 		else
-			g_qmaX981_data_c.more_data[0] = ((data[1]<<8) |( data[0]));
+			g_qmaX981_data_c.more_data[0] = step_num;	//((data[1]<<8) |( data[0]));
 		
 		// read data 2
-		ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
-		if(ret == 0)
+		ret = qmaX981_read_step(&step_num);
+		if(ret)
 			g_qmaX981_data_c.more_data[1] = -1;
 		else
-			g_qmaX981_data_c.more_data[1] = ((data[1]<<8) |( data[0]));
+			g_qmaX981_data_c.more_data[1] = step_num;	//((data[1]<<8) |( data[0]));
 
 
 		// read data 3
-		ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
-		if(ret == 0)
+		ret = qmaX981_read_step(&step_num);
+		if(ret)
 			g_qmaX981_data_c.more_data[2] = -1;
 		else
-			g_qmaX981_data_c.more_data[2] = ((data[1]<<8) |( data[0]));
+			g_qmaX981_data_c.more_data[2] = step_num;	//((data[1]<<8) |( data[0]));
 
 
 		if((g_qmaX981_data_c.more_data[0]<0)||(g_qmaX981_data_c.more_data[1]<0)||(g_qmaX981_data_c.more_data[2]<0))

@@ -23,11 +23,11 @@
 /*ÐÅÏ¢Êä³ö*/
 #define MPU_DEBUG_ON         1
 
-#define MPU_INFO(fmt,arg...)           printf("<<-MPU-INFO->> "fmt"\n",##arg)
-#define MPU_ERROR(fmt,arg...)          printf("<<-MPU-ERROR->> "fmt"\n",##arg)
+#define MPU_INFO(fmt,arg...)           console_write("<<-QST-I2C-INFO->> "fmt"\n",##arg)
+#define MPU_ERROR(fmt,arg...)          console_write("<<-QST-I2C-ERROR->> "fmt"\n",##arg)
 #define MPU_DEBUG(fmt,arg...)          do{\
                                           if(MPU_DEBUG_ON)\
-                                          printf("<<-MPU-DEBUG->> [%d]"fmt"\n",__LINE__, ##arg);\
+                                          console_write("<<-QST-I2C-DEBUG->> [%d]"fmt"\n",__LINE__, ##arg);\
                                           }while(0)
 
 

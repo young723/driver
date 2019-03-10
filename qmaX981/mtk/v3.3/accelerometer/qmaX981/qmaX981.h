@@ -1,39 +1,49 @@
-#ifndef __QMAX981_H
-#define __QMAX981_H
 
-#define QMAX981_USE_SW_IIC
-//#define QMAX981_USE_SPI
+#ifndef __QMAX981_H__
+#define __QMAX981_H__
 
-#define QMAX981_STEPCOUNTER
-#define QMAX981_USE_IRQ1
-#define QMA7981_ANY_MOTION
-#define QMA7981_NO_MOTION
-#define QMA7981_SIGNIFICANT_MOTION
+#include <linux/ioctl.h>  /* For IOCTL macros */
 
-#include "stm32f10x.h"
-#include "bsp_usart.h"
-#if defined(QMAX981_USE_SPI)
-#include "bsp_spi.h"
-#elif defined(QMAX981_USE_SW_IIC)
-#include "qst_sw_i2c.h"
-#else
-#include "bsp_i2c.h"
+#define ANDROID80_ABOVE
+#define QMAX981_CREATE_MISC_DEV
+#define QMAX981_STEP_COUNTER
+//#define QMAX981_FIFO_FUNC
+//#define QMAX981_TAP_FUNC
+//#define QMAX981_INT1_FUNC
+//#define QMAX981_INT2_FUNC
+//#define QMAX981_FIFO_FUNC
+//#define QMAX981_AUTO_CALI
+
+#if defined(QMAX981_STEP_COUNTER)
+#include "step_counter.h"
+#define QMAX981_CHECK_ABNORMAL_DATA
+#define QMAX981_STEP_DEBOUNCE_IN_INT
+#if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
+#define QMAX981_INT1_FUNC
+#endif
 #endif
 
-#include <stdbool.h>
-#include <string.h>
+//#if defined(QMAX981_FIFO_FUNC)
+//#define QMAX981_FIFO_USE_INT
+//#define QMAX981_INT1_FUNC
+//#endif
 
-typedef enum 
-{
-	ACC_RANGE_2G,
-	ACC_RANGE_4G,
-	ACC_RANGE_8G,
-	ACC_RANGE_16G,
-	ACC_RANGE_32G,
+#if defined(QMAX981_TAP_FUNC)
+#define QMAX981_INT1_FUNC
+#endif
+#if defined(QMAX981_STEP_COUNTER)||defined(QMAX981_INT1_FUNC)||defined(QMAX981_INT2_FUNC)
+#define QMAX981_FIX_REG
+#endif
 
-	ACC_RANGE_TOTAL
-}qmaX981_range;
+#define	QMAX981_ACC_DEV_NAME		"qmaX981"
+#define	QMAX981_STEP_C_DEV_NAME		"qmaX981_step_c"
 
+#define QMAX981_AXIS_X          0
+#define QMAX981_AXIS_Y          1
+#define QMAX981_AXIS_Z          2
+#define QMAX981_AXES_NUM        3
+
+/*I2C ADDRESS*/
 #define QMAX981_I2C_SLAVE_ADDR		0x12	// AD0 GND 0x12, AD0 VDD 0x13
 #define QMAX981_I2C_SLAVE_ADDR2		0x13	// AD0 GND 0x12, AD0 VDD 0x13
 #define QMAX981_ERR_I2C				-1
@@ -41,7 +51,7 @@ typedef enum
 
 #define GRAVITY_EARTH_1000          9807	// about (9.80665f)*1000   mm/s2
 #define QMAX981_ABS(X) 				((X) < 0 ? (-1 * (X)) : (X))
-#if defined(QMAX981_STEPCOUNTER)
+#if defined(QMAX981_STEP_COUNTER)
 #define QMA6981_OFFSET 				0x60
 #else
 #define QMA6981_OFFSET 				0x00
@@ -62,7 +72,6 @@ typedef enum
 #define QMAX981_INT_STAT2			0x0c
 #define QMAX981_INT_STAT3			0x0d
 #define QMAX981_FIFO_STATE			0x0e
-#define QMA7981_STEP_CNT_M			0x0e
 #define QMAX981_REG_RANGE			0x0f
 #define QMAX981_REG_BW_ODR			0x10
 #define QMAX981_REG_POWER_CTL		0x11
@@ -86,6 +95,12 @@ typedef enum
 #define QMA6981_ODR_16HZ			0x01
 #define QMA6981_ODR_HIGH			0x20
 
+#define QMA7981_ODR_250HZ			0xe2
+#define QMA7981_ODR_125HZ			0xe1  
+#define QMA7981_ODR_62HZ			0xe0   
+#define QMA7981_ODR_31HZ			0xe5   
+#define QMA7981_ODR_16HZ			0xe6
+
 /* Accelerometer Sensor Full Scale */
 #define QMAX981_RANGE_2G			0x01
 #define QMAX981_RANGE_4G			0x02
@@ -106,30 +121,17 @@ typedef enum
 #define QMA6981_SLEEP_DUR500		0x0e
 #define QMA6981_SLEEP_DUR1000		0x0f
 
+// for ioctl
+#define GSENSOR_IOCTL_RESET_SC         				_IO(GSENSOR, 0x10)
+#define GSENSOR_IOCTL_SET_STICK_CHECK_REG         	_IOW(GSENSOR, 0x11, int)
+#define GSENSOR_IOCTL_GET_STICK_STATUS         		_IOR(GSENSOR, 0x12, int)
+#define GSENSOR_IOCTL_GET_FIFO_DATA         		_IOR(GSENSOR, 0x13, int*)
+#define GSENSOR_IOCTL_GET_FIFO_RAW         			_IOR(GSENSOR, 0x14, int*)
+//#define GSENSOR_IOCTL_WRITE_REG         			_IOW(GSENSOR, 0x15, unsigned char*)
+//#define GSENSOR_IOCTL_READ_REG         				_IOR(GSENSOR, 0x16, unsigned char*)
+#define GSENSOR_IOCTL_SET_WAKELOCK         			_IO(GSENSOR, 0x17)
+//#define GSENSOR_IOCTL_SET_STEPCOUNTER				_IOW(GSENSOR, 0x18, long)
 
-
-/* Accelerometer Sensor Full Scale */
-#define QMAX981_RANGE_2G			0x01
-#define QMAX981_RANGE_4G			0x02
-#define QMAX981_RANGE_8G			0x04
-#define QMAX981_RANGE_16G			0x08
-#define QMAX981_RANGE_32G			0x0f
-
-#define QMAX981_IRQ1_RCC			RCC_APB2Periph_GPIOA  
-#define QMAX981_IRQ1_PORT			GPIOA 
-#define QMAX981_IRQ1_PIN			GPIO_Pin_11
-#define QMAX981_IRQ1_LINE			EXTI_Line11
-
-#define QMAX981_IRQ2_RCC			RCC_APB2Periph_GPIOA  
-#define QMAX981_IRQ2_PORT			GPIOA 
-#define QMAX981_IRQ2_PIN			GPIO_Pin_5  
-#define QMAX981_IRQ2_LINE			EXTI_Line5
-
-extern s32 qmaX981_init(void);
-extern s32 qmaX981_read_acc(s32 *accData);
-#if defined(QMAX981_STEPCOUNTER)
-extern u32 qmaX981_read_stepcounter(void);
-#endif
-
-
-#endif  /*QMX6981*/
+// for ioctl
+//extern void kpd_send_powerkey(int mode);
+#endif  /* __QMAX981_H__ */

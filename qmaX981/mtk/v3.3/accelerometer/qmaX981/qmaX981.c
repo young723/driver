@@ -90,6 +90,7 @@ typedef enum
 {
 	CHIP_TYPE_QMA6981 = 0,
 	CHIP_TYPE_QMA7981,
+	CHIP_TYPE_QMA6100,
 	CHIP_TYPE_UNDEFINE,
 
 	CHIP_TYPE_MAX
@@ -214,84 +215,34 @@ const unsigned char qma6981_init_tbl[][2] =
 
 /*	
 qma7981 odr setting
-0x10<2:0>		ODR(Hz)				Time(ms)	|	RANGE 0x0f<3:0>
-000				43.3125				23.088		|	0001	2g  		244ug/LSB
-001				86.4453				11.568		|	0010	4g  		488ug/LSB
-002				172.1763			5.808		|	0100	8g  		977ug/LSB
-003				341.5300			2.928		|	1000	16g  	1.95mg/LSB
-004				672.0430			1.488		|	1111	32g  	3.91mg/LSB
-005				32.5013				30.768		|	Others	2g  		244ug/LSB
-006				129.3995			7.728		|
-007				257.2016			3.888		|
+0x10<2:0>		ODR(Hz)					|	RANGE 0x0f<3:0>
+000				65						|	0001	2g  		244ug/LSB
+001				129						|	0010	4g  		488ug/LSB
+002				258						|	0100	8g  		977ug/LSB
+003				516						|	1000	16g  	1.95mg/LSB
+     				               				|	1111	32g  	3.91mg/LSB
+005				32						|	Others	2g  		244ug/LSB
+006				16						|
+007				8						|
 */
 
 const unsigned char qma7981_init_tbl[][2] = 
 {
-#if defined(QMAX981_STEP_COUNTER)
-	{0x11, 0x80},
-	{0x36, 0xb6},
-	{QMAX981_DELAY, 5},
-	{0x36, 0x00},	
-	{0x0f, QMAX981_RANGE_4G},	// 0.488 mg
-	{0x10, 0x05},		// BW 32.5hz
-	{0x4a, 0x08},		//Force I2C I2C interface.SPI is disabled,SENB can be used as ATB
-	{0x20, 0x05},
-	// seting 1
-	#if 0
-	{0x10, 0x05},		// BW 32.5hz, 30.768 ms
-	{0x12, 0x8f},		// 
-	{0x13, 0x22},		// STEP_PRECISION<6:0>*LSB*16 , 0.488*16*40=310mg
-	{0x14, 0x0e},		// STEP_TIME_LOW<7:0>*(1/ODR)
-	{0x15, 0x09},		// STEP_TIME_UP<7:0>*8*(1/ODR)
-	{0x1f, 0x00},
-	#endif
-	// setting 2
-	#if 1	
-	{0x0f, QMAX981_RANGE_4G},	// 0.488 mg
-	{0x10, 0x06},		// ODR: 129.3995 Hz		delay:7.728 ms
-	{0x12, 0x95},
-	{0x13, 0x80},		// clear step
-	{0x13, 0x22},		//old 0x22 // STEP_PRECISION<6:0>*LSB*16 , 0.488*16*34=265mg
-	{0x14, 0x3a},		// STEP_TIME_LOW<7:0>*(1/ODR) 7.728*58=450ms(0x3a)
-	{0x15, 0x20},		// STEP_TIME_UP<7:0>*8*(1/ODR) 7.728*32*8=1978ms
-	{0x1f, 0x00},		// 390.4mg 11:<30*(16*LSB)   10:<150*(16*LSB)   01:<100*(16*LSB)   00:<50*(16*LSB) 
-	#endif	
-	// setting 3
-	#if 0
-	{0x0f, QMAX981_RANGE_8G},	// 0.977 mg
-	{0x10, 0x05},		// ODR: 32.5013		delay:30.768 ms
-	{0x12, 0x95},
-	{0x13, 0x80},		// clear step
-	{0x13, 0x11},		// STEP_PRECISION<6:0>*LSB*16 , 0.488*16*34=265mg
-	{0x14, 0x0b},		// STEP_TIME_LOW<7:0>*(1/ODR) 7.728*58=450ms(0x3a)
-	{0x15, 0x41},		// STEP_TIME_UP<7:0>*8*(1/ODR) 7.728*32*8=1978ms
-	{0x1f, 0x03},		//468.96 mg 11:<30*(16*LSB)   10:<150*(16*LSB)   01:<100*(16*LSB)   00:<50*(16*LSB) 
-	#endif
-	
-	{0x11, 0x80},
-	{0x5f, 0x80},		// enable test mode,take control the FSM
-	{0x5f, 0x00},		//normal mode
-#else
-	{0x11, 0x80},
 	{0x36, 0xb6},
 	{QMAX981_DELAY, 5},
 	{0x36, 0x00},
-	{0x0f, QMAX981_RANGE_4G},
-	{0x10, 0x05},		// BW 32.5hz	
-	{0x4a, 0x08},		//Force I2C I2C interface.SPI is disabled,SENB can be used as ATB
-	{0x20, 0x05},	
-	{0x11, 0x80},
+#if defined(QMAX981_STEP_COUNTER)
+	{QMAX981_REG_RANGE, QMAX981_RANGE_4G},	// 0.488 mg
+	{QMAX981_REG_BW_ODR, 0xe1}, 			// ODR 129hz
+#else
+	{QMAX981_REG_RANGE, QMAX981_RANGE_4G},	// 0.488 mg
+	{QMAX981_REG_BW_ODR, 0xe1},				// ODR 129hz
+#endif
+	//{0x4a, 0x08},				//Force I2C I2C interface.SPI is disabled,SENB can be used as ATB
+	//{0x20, 0x05},
+	{QMAX981_REG_POWER_CTL, 0x80},
 	{0x5f, 0x80},		// enable test mode,take control the FSM
 	{0x5f, 0x00},		//normal mode
-#endif
-#if defined(QMAX981_FIFO_FUNC)
-	{0x10, 0x06},
-	{0x3E, 0x40},
-	{0x17, 0x20},
-	#if defined(QMAX981_FIFO_USE_INT)
-	{0x1a, 0x20},	// fifo int map to int1
-	#endif
-#endif
 
 	{QMAX981_DELAY, 1}
 };
@@ -448,6 +399,15 @@ int qmaX981_TxData(char *txData, int length)
 }
 #endif
 
+static int qmaX981_write_reg(unsigned char reg, unsigned char value)
+{
+    unsigned char databuf[2];
+
+	databuf[0] = reg;
+	databuf[1] = value;
+	return qmaX981_TxData(databuf,2);
+}
+
 static int qmaX981_set_mode(unsigned char enable)
 {
     int res = 0;	
@@ -465,8 +425,8 @@ static int qmaX981_set_mode(unsigned char enable)
     res = qmaX981_TxData(databuf,2);
     mdelay(2);
 
-	// for 7981 chip bug, delete later
-	if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
+	// for 7981
+	if((qmaX981->chip_type == CHIP_TYPE_QMA7981)||(qmaX981->chip_type == CHIP_TYPE_QMA6100))
 	{
 	    databuf[0] = 0x5f;
 	    databuf[1] = 0x80;
@@ -531,15 +491,19 @@ static int qmaX981_get_chip_id(void)
 	}
 	qmaX981->chip_id = databuf[0];
 	QMAX981_LOG("chip id = 0x%x \n", qmaX981->chip_id);
-	if((qmaX981->chip_id>=0xb0) && (qmaX981->chip_id<=0xb6))
+	if((qmaX981->chip_id>=0xb0) && (qmaX981->chip_id<=0xb9))
 	{
 		QMAX981_LOG("qma6981 find \n");
 		qmaX981->chip_type = CHIP_TYPE_QMA6981;
 	}
-	else if((qmaX981->chip_id>=0xe0) && (qmaX981->chip_id<=0xe6))
+	else if((qmaX981->chip_id>=0xe0) && (qmaX981->chip_id<=0xe7))
 	{
 		QMAX981_LOG("qma7981 find \n");
 		qmaX981->chip_type = CHIP_TYPE_QMA7981;
+	}	
+	else if(qmaX981->chip_id == 0xe8)
+	{
+		qmaX981->chip_type = CHIP_TYPE_QMA6100;
 	}
 	else
 	{
@@ -577,13 +541,22 @@ static int qmaX981_set_odr(int mdelay)
 
 		ret=qmaX981_TxData(databuf, 2);
 	}
-	else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
+	else if((qmaX981->chip_type == CHIP_TYPE_QMA7981)||(qmaX981->chip_type == CHIP_TYPE_QMA6100))
 	{	
-		// for 7981 , fix BW 32.5Hz, set ODR later
-		
-		//databuf[0] = QMAX981_REG_BW_ODR;
-		//databuf[1] = 0x05;
-		//ret=qmaX981_TxData(databuf, 2);
+		if(mdelay <= 5)
+			databuf[1] = QMA7981_ODR_250HZ;
+		else if(mdelay <= 10)
+			databuf[1] = QMA7981_ODR_125HZ;
+		else if(mdelay <= 20)
+			databuf[1] = QMA7981_ODR_62HZ;
+		else if(mdelay <= 50)
+			databuf[1] = QMA7981_ODR_31HZ;
+		else if(mdelay <= 100)
+			databuf[1] = QMA7981_ODR_16HZ;
+		else
+			databuf[1] = QMA7981_ODR_16HZ;
+
+		ret=qmaX981_TxData(databuf, 2);
 	}
 	else
 	{
@@ -622,7 +595,7 @@ static int qmaX981_set_range(unsigned char range)
 			qmaX981->lsb_1g = 256;
 
 	}
-	else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
+	else if((qmaX981->chip_type == CHIP_TYPE_QMA7981)||(qmaX981->chip_type == CHIP_TYPE_QMA6100))
 	{	
 		data[0] = QMAX981_REG_RANGE;
 		data[1] = range;
@@ -740,7 +713,7 @@ static int qmaX981_read_raw_xyz(int *data)
 
 	if(qmaX981->chip_type == CHIP_TYPE_QMA6981)
 		ret = qma6981_read_raw_xyz(data);
-	else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
+	else if((qmaX981->chip_type == CHIP_TYPE_QMA7981)||(qmaX981->chip_type == CHIP_TYPE_QMA6100))
 		ret = qma7981_read_raw_xyz(data);
 	else
 		ret = -1;
@@ -859,7 +832,7 @@ static int qmaX981_read_fifo_acc(int *acc_data)
 	{
 		ret = qma6981_read_fifo_raw(raw_data);
 	}
-	else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
+	else if((qmaX981->chip_type == CHIP_TYPE_QMA7981)||(qmaX981->chip_type == CHIP_TYPE_QMA6100))
 	{
 		ret = qma7981_read_fifo_raw(raw_data);
 	}
@@ -910,11 +883,15 @@ static int qmaX981_read_fifo(unsigned char is_raw)
 #if defined(QMAX981_FIFO_USE_INT)
 	wait_event_interruptible(qmcX981_wq1, (qmaX981->wq1_flag > 0));
 #endif
-	if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
-		fifo_depth = 16;
+	if(qmaX981->chip_type == CHIP_TYPE_QMA6100)
+		fifo_depth = 64;
 	else
 		fifo_depth = 32;
 
+// read int status
+	databuf[0] = QMAX981_INT_STAT1;
+	ret = qmaX981_RxData(databuf, 1);
+// read int status
 	databuf[0] = QMAX981_FIFO_STATE;
 	if((ret = qmaX981_RxData(databuf, 1)))
 	{
@@ -937,7 +914,7 @@ static int qmaX981_read_fifo(unsigned char is_raw)
 				{
 					ret = qma6981_read_fifo_raw(acc_data);
 				}
-				else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
+				else if(qmaX981->chip_type == CHIP_TYPE_QMA6100)
 				{
 					ret = qma7981_read_fifo_raw(acc_data);
 				}
@@ -1244,6 +1221,8 @@ static ssize_t show_chipinfo_value(struct device_driver *ddri, char *buf)
 			return sprintf(buf, "chipid:%02x qma6981\n", qmaX981->chip_id);
 		else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
 			return sprintf(buf, "chipid:%02x qma7981\n", qmaX981->chip_id);
+		else if(qmaX981->chip_type == CHIP_TYPE_QMA6100)
+			return sprintf(buf, "chipid:%02x qma6100\n", qmaX981->chip_id);
 		else
 			return sprintf(buf, "chipid:%02x undefined!\n", qmaX981->chip_id);
 	}
@@ -1712,9 +1691,17 @@ static int qma7981_initialize(void)
 	int ret = 0;
 	int index, total;
 	unsigned char data[2] = {0};
-	// for 7981, from peili, delete later
-	unsigned char r_58,r_59,r_5a,r_42,r_44,r_3d;
-	// peili
+	unsigned char reg_0x10 = 0;
+	unsigned char reg_0x16 = 0;
+	unsigned char reg_0x18 = 0;
+	unsigned char reg_0x19 = 0;
+	unsigned char reg_0x1a = 0;
+#if defined(QMA7981_ANY_MOTION)||defined(QMA7981_NO_MOTION)
+	unsigned char reg_0x2c = 0;
+#endif
+#if defined(QMA7981_HAND_UP_DOWN)
+	//unsigned char reg_0x42 = 0;
+#endif
 
 	total = sizeof(qma7981_init_tbl)/sizeof(qma7981_init_tbl[0]);
 	for(index=0; index<total; index++)
@@ -1740,6 +1727,10 @@ static int qma7981_initialize(void)
 				else
 					qmaX981->lsb_1g = 4096;
 			}
+			else if(data[0] == QMAX981_REG_BW_ODR)
+			{
+				reg_0x10 = data[1];
+			}
 			ret = qmaX981_TxData(data,2);
 			if(ret)
 			{
@@ -1749,41 +1740,143 @@ static int qma7981_initialize(void)
 		}
 	}
 
-	// for 7981, from peili, delete later
-	r_58 = 0x58;	
-	ret=qmaX981_RxData(&r_58, 1);
+	reg_0x16 = 0x16;
+	qmaX981_RxData(&reg_0x16, 1);
+	reg_0x18 = 0x18;
+	qmaX981_RxData(&reg_0x18, 1);
+	reg_0x19 = 0x19;
+	qmaX981_RxData(&reg_0x19, 1);
+	reg_0x1a = 0x1a;
+	qmaX981_RxData(&reg_0x1a, 1);
 
-	r_59 = 0x59;	
-	ret=qmaX981_RxData(&r_59, 1);
-
-	r_5a = 0x5a;	
-	ret=qmaX981_RxData(&r_5a, 1);
-
-	r_42 = 0x42;	
-	ret=qmaX981_RxData(&r_42, 1);
-
-	r_44 = 0x44;	
-	ret=qmaX981_RxData(&r_44, 1);
-
-	r_3d = 0x3d;	
-	ret=qmaX981_RxData(&r_3d, 1);
+#if defined(QMAX981_STEP_COUNTER)
+	if(reg_0x10 == 0xe0)
+	{
+		// ODR: 65hz 15.48 ms
+		qmaX981_write_reg(0x12, 0x94);
+		qmaX981_write_reg(0x13, 0x80);		// clear step
+		qmaX981_write_reg(0x13, 0x00);		// 
+		qmaX981_write_reg(0x14, 0x12);		// STEP_TIME_LOW<7:0>*(1/ODR) 
+		qmaX981_write_reg(0x15, 0x10);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+	}
+	else if(reg_0x10 == 0xe1)
+	{
+		// ODR: 130hz 7.74 ms
+		qmaX981_write_reg(0x12, 0x94);
+		qmaX981_write_reg(0x13, 0x80);		// clear step
+		qmaX981_write_reg(0x13, 0x00);		// 
+		qmaX981_write_reg(0x14, 0x24);		// STEP_TIME_LOW<7:0>*(1/ODR) 
+		qmaX981_write_reg(0x15, 0x20);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+	}
+	else if(reg_0x10 == 0xe2)
+	{
+		// ODR: 258Hz 3.87 ms
+		qmaX981_write_reg(0x12, 0x94);
+		qmaX981_write_reg(0x13, 0x80);		// clear step
+		qmaX981_write_reg(0x13, 0x00);		// 
+		qmaX981_write_reg(0x14, 0x48);		// STEP_TIME_LOW<7:0>*(1/ODR) 
+		qmaX981_write_reg(0x15, 0x40);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+	}
 	
-	//write 0x58<3> to 0x3D<7>
-	data[0] = 0x3d;
-	data[1] = (r_3d|0x7f)|((r_58&0x08)<<4);
-	ret = qmaX981_TxData(data,2);
-	//write 0x5a<7:5>,0x59<7:5> to 0x42<5:0>
-	data[0] = 0x42;
-	data[1] = (r_42&0xc0)|((r_59&0xe0)>>5)|((r_5a&0xe0)>>2);
-	ret = qmaX981_TxData(data,2);
-	//write 0x59<3:0> to 0x44<3:0>
-	data[0] = 0x44;
-	data[1] = (r_44&0xf0)|(r_59&0x0f);
-	ret = qmaX981_TxData(data,2);
+#if defined(QMA7981_STEP_INT)
+	reg_0x16 |= 0x08;
+	reg_0x19 |= 0x08;
+	qmaX981_write_reg(0x16, reg_0x16);
+	qmaX981_write_reg(0x19, reg_0x19);
+#endif
+#if defined(QMA7981_SIGNIFICANT_STEP)
+	qmaX981_write_reg(0x1d, 0x26);		//every 30 step
+	reg_0x16 |= 0x40;
+	reg_0x19 |= 0x40;
+	qmaX981_write_reg(0x16, reg_0x16);
+	qmaX981_write_reg(0x19, reg_0x19);
+#endif
+#endif
 
-	// peili
+#if defined(QMA7981_ANY_MOTION)
+	reg_0x18 |= 0x07;
+	reg_0x1a |= 0x01;
+	reg_0x2c |= 0x00;
+	
+	qmaX981_write_reg(0x18, reg_0x18);
+	qmaX981_write_reg(0x1a, reg_0x1a);
+	qmaX981_write_reg(0x2c, reg_0x2c);
+	qmaX981_write_reg(0x2e, 0x14);		// 0.488*16*32 = 250mg
+			
+#if defined(QMA7981_SIGNIFICANT_MOTION)
+	qmaX981_write_reg(0x2f, 0x0c|0x01);
+	reg_0x19 |= 0x01;
+	qmaX981_write_reg(0x19, reg_0x19);
+#endif
+#endif
+	
+#if defined(QMA7981_NO_MOTION)
+	reg_0x18 |= 0xe0;
+	reg_0x1a |= 0x80;
+	reg_0x2c |= 0x24;
+
+	qmaX981_write_reg(0x18, reg_0x18);
+	qmaX981_write_reg(0x1a, reg_0x1a);
+	qmaX981_write_reg(0x2c, reg_0x2c);
+	qmaX981_write_reg(0x2d, 0x14);
+#endif
+
+#if defined(QMA7981_HAND_UP_DOWN)
+	reg_0x16 |= 0x02;
+	reg_0x19 |= 0x02;
+			
+	qmaX981_write_reg(0x16, reg_0x16);
+	qmaX981_write_reg(0x19, reg_0x19);
+	// hand down
+	reg_0x16 |= 0x04;
+	reg_0x19 |= 0x04;
+	qmaX981_write_reg(0x16, reg_0x16);
+	qmaX981_write_reg(0x19, reg_0x19);
+	// hand down	
+	#if 0	// swap xy
+	//read_reg(0x42, &reg_0x42, 1);
+	reg_0x42 = 0x42;
+	qmaX981_RxData(&reg_0x42, 1);
+	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
+	qmaX981_write_reg(0x42, reg_0x42);
+	#endif
+#endif
+
+#if defined(QMA7981_DATA_READY)
+	reg_0x1a |= 0x10;
+	qmaX981_write_reg(0x17, 0x10);
+	qmaX981_write_reg(0x1a, reg_0x1a);
+#endif
+	
+#if defined(QMA7981_INT_LATCH)
+	//qmaX981_write_reg(0x21, 0x3f);	// default 0x1c, step latch mode
+	qmaX981_write_reg(0x21, 0x1f);	// default 0x1c, step latch mode
+#endif
 
    	return 0;
+}
+
+static int qma6100_initialize(void)
+{
+	qmaX981_write_reg(0x36, 0xb6);
+	mdelay(5);
+	qmaX981_write_reg(0x36, 0x00);
+	qmaX981_set_range(QMAX981_RANGE_4G);
+	qmaX981_write_reg(QMAX981_REG_BW_ODR, 0xe0);
+#if defined(QMAX981_FIFO_FUNC)
+	qmaX981_write_reg(0x31, 0x10);
+	qmaX981_write_reg(0x3e, 0x40);		// fifo mode
+	qmaX981_write_reg(0x17, 0x20);		// fifo full
+	qmaX981_write_reg(0x1a, 0x20);		// map to int1
+	qmaX981_write_reg(0x20, 0x05);		// int default low
+	qmaX981_write_reg(0x21, 0x01);		// int latch modes
+#endif
+	qmaX981_write_reg(QMAX981_REG_POWER_CTL, 0x80);
+	qmaX981_write_reg(0x5f, 0x80);
+	qmaX981_write_reg(0x5f, 0x00);
+	mdelay(5);
+
+	return 0;
 }
 
 static int qmaX981_initialize(void)
@@ -1792,6 +1885,8 @@ static int qmaX981_initialize(void)
 		return qma6981_initialize();
 	else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
 		return qma7981_initialize();
+	else if(qmaX981->chip_type == CHIP_TYPE_QMA6100)
+		return qma6100_initialize();
 	else
 		return -1;
 }
@@ -2933,6 +3028,36 @@ static int qmaX981_local_uninit(void)
 }
 
 #ifdef QMAX981_STEP_COUNTER
+int qmaX981_read_step(int *data)
+{
+	int res=0;	
+	int result=0;
+	char databuf[3];
+
+	databuf[0] = QMAX981_STEP_CNT_L;
+	if((res = qmaX981_RxData(databuf, 2))){
+		QMAX981_ERR("read stepcounter error!!!\n");
+		return -EFAULT;
+	}
+	if(qmaX981->chip_type == CHIP_TYPE_QMA6981)
+	{
+		result = (int)(((unsigned short)databuf[1]<<8)|databuf[0]);
+	}
+	else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
+	{
+		databuf[2] = 0x0e;
+		if((res = qmaX981_RxData(&databuf[2], 1))){
+			QMAX981_ERR("read stepcounter 0x0e error!!!\n");
+			return -EFAULT;
+		}
+		result = (int)(((int)databuf[2]<<16)|((int)databuf[1]<<8)|databuf[0]);
+	}
+
+	*data = result;
+
+	return 0;
+}
+
 static int qmaX981_step_c_open_report_data(int open)
 {
 	return 0;
@@ -2998,18 +3123,16 @@ static int qmaX981_step_c_get_data_step_d(u32 *value, int *status)		//(u64 *valu
 static int qmaX981_step_c_read_stepCounter(int *data)
 {
 	int res;
-	char databuf[2];
+//	char databuf[2];
 	int result;
 #if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
 	int de_result;
 #endif
 
-	databuf[0] = QMAX981_STEP_CNT_L;
-	if((res = qmaX981_RxData(databuf, 2))){
+	if((res = qmaX981_read_step(&result))){
 		QMAX981_ERR("read stepcounter error!!!\n");
 		return -EFAULT;
 	}
-	result = (databuf[1]<<8)|databuf[0];
 #if defined(QMAX981_CHECK_ABNORMAL_DATA)
 	if((res=qmaX981_check_abnormal_data(result, &result)))
 	{

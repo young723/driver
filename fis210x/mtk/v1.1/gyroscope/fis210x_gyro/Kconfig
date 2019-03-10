@@ -1,0 +1,8 @@
+
+config MTK_FIS210X_GYRO
+	bool "FIS210X gyroscope for MediaTek package"
+	default n
+	help
+	  It support different gyroscope sensor.
+	  If this option is set,
+	  it will support FIS210X gyroscope.

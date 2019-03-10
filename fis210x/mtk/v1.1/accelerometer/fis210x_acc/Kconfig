@@ -1,0 +1,12 @@
+config MTK_FIS210X_ACC
+	bool "MTK_FIS210X_ACC for MediaTek package"
+	default n
+	help
+	  The FIS210X is a highly integrated,
+	  low power internal measurement unit
+	  that provides precise acceleration
+	  and angular rate (gyroscopic) measurement.
+	  It support different accelerometer sensor.
+	  If this option is set, it will support
+	  MTK_FIX210x Accelerometer.
+

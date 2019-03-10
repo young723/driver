@@ -574,7 +574,7 @@ static int qmaX981_set_odr(int mdelay)
 		else
 			databuf[1] = QMA6981_ODR_16HZ;
 
-		ret=qmaX981_RxData(databuf, 1);
+		ret=qmaX981_TxData(databuf, 2);
 	}
 	else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
 	{	
@@ -582,7 +582,7 @@ static int qmaX981_set_odr(int mdelay)
 		
 		//databuf[0] = QMAX981_REG_BW_ODR;
 		//databuf[1] = 0x05;
-		//ret=qmaX981_RxData(databuf, 1);
+		//ret=qmaX981_TxData(databuf, 2);
 	}
 	else
 	{

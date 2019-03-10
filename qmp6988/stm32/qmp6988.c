@@ -138,38 +138,37 @@ static int qmp6988_get_calibration_data(void)
 	u8 a_data_u8r[QMP6988_CALIBRATION_DATA_LENGTH] = {0};
 	int len;
 
-#if 1
 	status = qmp6988_ReadData(QMP6988_CALIBRATION_DATA_START,a_data_u8r,QMP6988_CALIBRATION_DATA_LENGTH);
 	if (status == 0)
 	{
 		QMP6988_LOG("qmp6988 read 0xA0 error!");
 		return status;
 	}
-#else
-	for(len = 0; len < QMP6988_CALIBRATION_DATA_LENGTH; len += 8)
-	{
-		if((QMP6988_CALIBRATION_DATA_LENGTH-len) >= 8 )
-			status = qmp6988_ReadData(QMP6988_CALIBRATION_DATA_START+len,&a_data_u8r[len],8);
-		else
-			status = qmp6988_ReadData(QMP6988_CALIBRATION_DATA_START+len,&a_data_u8r[len],(QMP6988_CALIBRATION_DATA_LENGTH-len));
-		if (status == 0)
-		{
-			QMP6988_LOG("qmp6988 read 0xA0 error!");
-			return status;
-		}
-	}
-#endif
 
 #if 0
 	temp_COE.x = (QMP6988_U32_t)((a_data_u8r[18] << \
 		SHIFT_LEFT_12_POSITION) | (a_data_u8r[19] << \
 		SHIFT_LEFT_4_POSITION) | (a_data_u8r[24] & 0x0f));
 	g_qmp6988.qmp6988_cali.COE_a0 = 	temp_COE.x;
-#else
-	g_qmp6988.qmp6988_cali.COE_a0 = (QMP6988_S32_t)(((a_data_u8r[18] << SHIFT_LEFT_12_POSITION) \
-							| (a_data_u8r[19] << SHIFT_LEFT_4_POSITION) \
-							| (a_data_u8r[24] & 0x0f))<<12);
 
+	qmp6988_cali.COE_a0 = (QMP6988_S32_t)(((QMP6988_U32_t)buf_wr[18] << SHIFT_LEFT_12_POSITION) \
+	| ((QMP6988_U32_t)buf_wr[19] << SHIFT_LEFT_4_POSITION) \
+	| ((QMP6988_U32_t)buf_wr[24] & 0x0f));
+	if(qmp6988_cali.COE_a0 == 0x80000)
+	{
+		qmp6988_cali.COE_a0 = -0x80000;
+	}
+	else if(qmp6988_cali.COE_a0 & 0x80000 )
+	{
+		qmp6988_cali.COE_a0 -= 0x1;
+		qmp6988_cali.COE_a0 = ~qmp6988_cali.COE_a0;
+		qmp6988_cali.COE_a0 &= 0x7ffff;
+		qmp6988_cali.COE_a0 = -qmp6988_cali.COE_a0; 	
+	}
+#else
+	g_qmp6988.qmp6988_cali.COE_a0 = (QMP6988_S32_t)((((QMP6988_U32_t)a_data_u8r[18]<<SHIFT_LEFT_12_POSITION) \
+							| ((QMP6988_U32_t)a_data_u8r[19]<<SHIFT_LEFT_4_POSITION) \
+							| ((QMP6988_U32_t)a_data_u8r[24]&0x0f))<<12);
 	g_qmp6988.qmp6988_cali.COE_a0 = g_qmp6988.qmp6988_cali.COE_a0>>12;
 #endif
 	
@@ -181,10 +180,26 @@ static int qmp6988_get_calibration_data(void)
 		SHIFT_LEFT_12_POSITION) | (a_data_u8r[1] << \
 		SHIFT_LEFT_4_POSITION) | ((a_data_u8r[24] & 0xf0) >> SHIFT_RIGHT_4_POSITION));
 	g_qmp6988.qmp6988_cali.COE_b00 = temp_COE.x;
+
+	qmp6988_cali.COE_b00 = (QMP6988_S32_t)(((QMP6988_U32_t)buf_wr[0] << SHIFT_LEFT_12_POSITION) \
+		| ((QMP6988_U32_t)buf_wr[1] << SHIFT_LEFT_4_POSITION) \
+		| (((QMP6988_U32_t)buf_wr[24] & 0xf0) >> SHIFT_RIGHT_4_POSITION));
+
+	if(qmp6988_cali.COE_b00 == 0x80000)
+	{
+		qmp6988_cali.COE_b00 = -0x80000;
+	}
+	else if(qmp6988_cali.COE_b00 & 0x80000 )
+	{
+		qmp6988_cali.COE_b00 -= 0x1;
+		qmp6988_cali.COE_b00 = ~qmp6988_cali.COE_b00;
+		qmp6988_cali.COE_b00 &= 0x7ffff;
+		qmp6988_cali.COE_b00 = -qmp6988_cali.COE_b00; 	
+	}
 #else
-	g_qmp6988.qmp6988_cali.COE_b00 = (QMP6988_S32_t)(((a_data_u8r[0] << SHIFT_LEFT_12_POSITION) \
-							| (a_data_u8r[1] << SHIFT_LEFT_4_POSITION) \
-							| ((a_data_u8r[24] & 0xf0) >> SHIFT_RIGHT_4_POSITION))<<12);
+	g_qmp6988.qmp6988_cali.COE_b00 = (QMP6988_S32_t)((((QMP6988_U32_t)a_data_u8r[0]<<SHIFT_LEFT_12_POSITION) \
+							| ((QMP6988_U32_t)a_data_u8r[1]<<SHIFT_LEFT_4_POSITION) \
+							| (((QMP6988_U32_t)a_data_u8r[24]&0xf0)>>SHIFT_RIGHT_4_POSITION))<<12);
 	g_qmp6988.qmp6988_cali.COE_b00 = g_qmp6988.qmp6988_cali.COE_b00>>12;
 #endif
 	g_qmp6988.qmp6988_cali.COE_bt1 = (QMP6988_S16_t)(((a_data_u8r[2]) << SHIFT_LEFT_8_POSITION) | a_data_u8r[3]);
@@ -221,9 +236,9 @@ static int qmp6988_get_calibration_data(void)
 	bp3 = Conv_A_S[9][0] + Conv_A_S[9][1] * g_qmp6988.qmp6988_cali.COE_bp3 / 32767.0f;
 	
 	QMP6988_LOG("<----------- float calibration data -------------->\n");
-	QMP6988_LOG("a0[%f]	a1[%f]	a2[%f]	b00[%f]\n",a0,a1,a2,b00);
-	QMP6988_LOG("bt1[%f]	bt2[%f]	bp1[%f]	b11[%f]\n",bt1,bt2,bp1,b11);
-	QMP6988_LOG("bp2[%f]	b12[%f]	b21[%f]	bp3[%f]\n",bp2,b12,b21,bp3);
+	QMP6988_LOG("a0[%lle]	a1[%lle]	a2[%lle]	b00[%lle]\n",a0,a1,a2,b00);
+	QMP6988_LOG("bt1[%lle]	bt2[%lle]	bp1[%lle]	b11[%lle]\n",bt1,bt2,bp1,b11);
+	QMP6988_LOG("bp2[%lle]	b12[%lle]	b21[%lle]	bp3[%lle]\n",bp2,b12,b21,bp3);
 	QMP6988_LOG("<----------- float calibration data -------------->\n");
 
 	return 1;
@@ -419,7 +434,7 @@ u8 qmp6988_init(void)
 	qmp6988_set_oversampling_t(QMP6988_OVERSAMPLING_1X);
 
 	//
-#if 1
+#if 0
 	{
 		u8 reg_data;
 
