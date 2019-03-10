@@ -1,0 +1,127 @@
+C51 COMPILER V9.56.0.0   MAIN                                                              07/03/2018 13:57:58 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE PRINT(.\Listings\main.lst) TABS(2) OBJEC
+                    -T(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <REGX52.H>
+   2          //#include <AT89X52.H>
+   3          #include <stdio.h>
+   4          #include <string.h>
+   5          #include "qst_sw_i2c.h"
+   6          #include "qst_common.h"
+   7          
+   8          /**********************51???????************************
+   9          *  ??:Keil U4 + STC89C52
+  10          *  ??:UART??????? A
+  11          *  ??:??
+  12          *  ??:11.0592MHZ
+  13          ******************************************************************/
+  14          
+  15          //#define jingzhen     11059200UL                         /*??11.0592M??*/         
+  16          //#define botelv   9600UL                     /*??????9600*/
+  17          
+  18          extern void uart_init(void);
+  19          extern void qst_log(const char *format, ...);
+  20          extern s32 qmaX981_init(void);
+  21          extern s32 qmaX981_read_acc(s32 *accData);
+  22          extern s32 qmaX981_read_raw(s32 *rawData);
+  23          extern u8 qmaX981_readreg(u8 reg_add,u8 *buf,u8 num);
+  24          
+  25          unsigned char g_qmaX981_int_flag = 0;
+  26          void delay(unsigned char i)
+  27          {
+  28   1              unsigned char j,k;
+  29   1              for(j=i;j>0;j--)
+  30   1                      for(k=90;k>0;k--);
+  31   1      }
+  32          
+  33          
+  34          void Int0Init()
+  35          {
+  36   1        //设置INT0
+  37   1        IT0=1;//跳变沿出发方式1:下降沿0:低电平
+  38   1        EX0=1;//打开INT1的中断允许。  
+  39   1        EA=1;//打开总中断 
+  40   1      }
+  41          
+  42          void Int1Init()
+  43          {
+  44   1        //设置INT1
+  45   1        IT1=1;//跳变沿出发方式（下降沿）
+  46   1        EX1=1;//打开INT1的中断允许。  
+  47   1        EA=1;//打开总中断 
+  48   1      }
+  49          
+  50          
+  51          int main()
+  52          {
+  53   1        int_32 acc_data[3];
+  54   1        unsigned char databuf;
+C51 COMPILER V9.56.0.0   MAIN                                                              07/03/2018 13:57:58 PAGE 2   
+
+  55   1        
+  56   1        uart_init();
+  57   1        Int0Init();
+  58   1        Int1Init();
+  59   1        qst_log("QST start! i2c_check=%d\n");
+  60   1      
+  61   1        qmaX981_init();
+  62   1        while(1)
+  63   1        {
+  64   2          qmaX981_read_raw(acc_data);
+  65   2          //qst_log("acc_data[%d  %d  %d]\n", acc_data[0], acc_data[1], acc_data[2]);
+  66   2          if(g_qmaX981_int_flag == 1)
+  67   2          {
+  68   3            qmaX981_readreg(0x0a, &databuf, 1);
+  69   3            qst_log("qmaX981_int status=%d \n", (u16)databuf);
+  70   3            g_qmaX981_int_flag = 0;
+  71   3          }
+  72   2          delay(10000);
+  73   2        }
+  74   1      
+  75   1        return(0);
+  76   1      }
+  77          
+  78          void Int0_handle()  interrupt 0   //外部中断0的中断函数
+  79          {
+  80   1        EX0=0;
+  81   1        //delay(1000);   //延时消抖
+  82   1        if(P3_2==0)
+  83   1        {
+  84   2          P2_5 = ~P2_5;
+  85   2          g_qmaX981_int_flag = 1;
+  86   2        }
+  87   1        EX0=1;
+  88   1      }
+  89          
+  90          void Int1_handle()  interrupt 2   //外部中断1的中断函数
+  91          {
+  92   1        EX1=0;
+  93   1        //delay(1000);   //延时消抖
+  94   1        if(P3_3==0)
+  95   1        {
+  96   2          P2_4 = ~P2_4;
+  97   2          g_qmaX981_int_flag = 1;
+  98   2        }
+  99   1        EX1=1;
+ 100   1      }
+*** WARNING C294 IN LINE 75 OF main.c: unreachable code
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    128    ----
+   CONSTANT SIZE    =     49    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      1       7
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

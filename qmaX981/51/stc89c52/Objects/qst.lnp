@@ -1,0 +1,7 @@
+".\Objects\STARTUP.obj",
+".\Objects\main.obj",
+".\Objects\qst_sw_i2c.obj",
+".\Objects\qst_uart.obj",
+".\Objects\qmaX981.obj" 
+TO ".\Objects\qst" 
+PRINT(".\Listings\qst.m51") RAMSIZE(256) 

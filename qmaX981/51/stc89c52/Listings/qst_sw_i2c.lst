@@ -1,0 +1,364 @@
+C51 COMPILER V9.56.0.0   QST_SW_I2C                                                        07/03/2018 13:34:10 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE QST_SW_I2C
+OBJECT MODULE PLACED IN .\Objects\qst_sw_i2c.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE qst_sw_i2c.c OPTIMIZE(8,SPEED) BROWSE PRINT(.\Listings\qst_sw_i2c.lst) T
+                    -ABS(2) OBJECT(.\Objects\qst_sw_i2c.obj)
+
+line level    source
+
+   1          #include <REGX52.H>
+   2          #include "qst_sw_i2c.h"
+   3          
+   4          static unsigned char QST_SW_I2C_ADDR_W = 0x24;
+   5          static unsigned char  QST_SW_I2C_ADDR_R = 0x25;
+   6          
+   7          #define I2C_SCL_PIN   P2_1
+   8          #define I2C_SDA_PIN   P2_0
+   9          
+  10          #define I2C_SCL_OUTPUT()      
+  11          #define I2C_SCL_INPUT()     
+  12          #define I2C_SDA_OUTPUT()      
+  13          #define I2C_SDA_INPUT()     
+  14          #define I2C_SCL_1()  I2C_SCL_PIN=1    /* SCL = 1 */
+  15          #define I2C_SCL_0()  I2C_SCL_PIN=0    /* SCL = 0 */
+  16          #define I2C_SDA_1()  I2C_SDA_PIN=1    /* SDA = 1 */
+  17          #define I2C_SDA_0()  I2C_SDA_PIN=0    /* SDA = 0 */
+  18          #define I2C_SDA_READ()  I2C_SDA_PIN   /* SDA data */
+  19          
+  20          
+  21          void i2c_GPIO_Config(void);
+  22          void i2c_Ack(void);
+  23          void i2c_NAck(void);
+  24          
+  25          /*
+  26          *********************************************************************************************************
+  27          * ? ? ?: i2c_Delay
+  28          * ????: I2C?????,??400KHz
+  29          * ?    ?:?
+  30          * ? ? ?: ?
+  31          *********************************************************************************************************
+  32          */
+  33          static void i2c_Delay(void)
+  34          {
+  35   1        unsigned char i;
+  36   1      
+  37   1        /* 
+  38   1          ???????????AX-Pro???????????
+  39   1          CPU??72MHz?,???Flash??, MDK?????
+  40   1          ?????10?,SCL?? = 205KHz 
+  41   1          ?????7?,SCL?? = 347KHz, SCL?????1.5us,SCL?????2.87us 
+  42   1          ?????5?,SCL?? = 421KHz, SCL?????1.25us,SCL?????2.375us 
+  43   1              
+  44   1          IAR???????,?????7
+  45   1        */
+  46   1        for (i = 0; i < 10; i++);
+  47   1      }
+  48          
+  49          /*
+  50          *********************************************************************************************************
+  51          * ? ? ?: i2c_Start
+  52          * ????: CPU??I2C??????
+  53          * ?    ?:?
+  54          * ? ? ?: ?
+C51 COMPILER V9.56.0.0   QST_SW_I2C                                                        07/03/2018 13:34:10 PAGE 2   
+
+  55          *********************************************************************************************************
+  56          */
+  57          void i2c_Start(void)
+  58          {
+  59   1        /* ?SCL????,SDA?????????I2C?????? */
+  60   1        
+  61   1        I2C_SCL_OUTPUT();
+  62   1        I2C_SDA_OUTPUT();
+  63   1        
+  64   1        I2C_SDA_1();
+  65   1        I2C_SCL_1();
+  66   1        i2c_Delay();
+  67   1        I2C_SDA_0();
+  68   1        i2c_Delay();
+  69   1        I2C_SCL_0();
+  70   1        i2c_Delay();
+  71   1      }
+  72          
+  73          /*
+  74          *********************************************************************************************************
+  75          * ? ? ?: i2c_Start
+  76          * ????: CPU??I2C??????
+  77          * ?    ?:?
+  78          * ? ? ?: ?
+  79          *********************************************************************************************************
+  80          */
+  81          void i2c_Stop(void)
+  82          {
+  83   1        I2C_SCL_OUTPUT();
+  84   1        I2C_SDA_OUTPUT();
+  85   1      
+  86   1        /* ?SCL????,SDA?????????I2C?????? */
+  87   1        I2C_SDA_0();
+  88   1        I2C_SCL_1();
+  89   1        i2c_Delay();
+  90   1        I2C_SDA_1();
+  91   1      }
+  92          
+  93          /*
+  94          *********************************************************************************************************
+  95          * ? ? ?: i2c_SendByte
+  96          * ????: CPU?I2C??????8bit??
+  97          * ?    ?:_ucByte : ???????
+  98          * ? ? ?: ?
+  99          *********************************************************************************************************
+ 100          */
+ 101          void i2c_SendByte(unsigned char _ucByte)
+ 102          {
+ 103   1        unsigned char i;
+ 104   1      
+ 105   1        /* ????????bit7 */
+ 106   1        for (i = 0; i < 8; i++)
+ 107   1        {   
+ 108   2          if (_ucByte & 0x80)
+ 109   2          {
+ 110   3            I2C_SDA_1();
+ 111   3          }
+ 112   2          else
+ 113   2          {
+ 114   3            I2C_SDA_0();
+ 115   3          }
+ 116   2          i2c_Delay();
+C51 COMPILER V9.56.0.0   QST_SW_I2C                                                        07/03/2018 13:34:10 PAGE 3   
+
+ 117   2          I2C_SCL_1();
+ 118   2          i2c_Delay();  
+ 119   2          I2C_SCL_0();
+ 120   2          if (i == 7)
+ 121   2          {
+ 122   3             I2C_SDA_1(); // ????
+ 123   3          }
+ 124   2          _ucByte <<= 1;  /* ????bit */
+ 125   2          i2c_Delay();
+ 126   2        }
+ 127   1      }
+ 128          
+ 129          /*
+ 130          *********************************************************************************************************
+ 131          * ? ? ?: i2c_ReadByte
+ 132          * ????: CPU?I2C??????8bit??
+ 133          * ?    ?:?
+ 134          * ? ? ?: ?????
+ 135          *********************************************************************************************************
+ 136          */
+ 137          unsigned char i2c_ReadByte(unsigned char ack)
+ 138          {
+ 139   1        unsigned char i;
+ 140   1        unsigned char value;
+ 141   1      
+ 142   1        /* ???1?bit????bit7 */
+ 143   1        I2C_SDA_INPUT();  // set data input 
+ 144   1        i2c_Delay();
+ 145   1        value = 0;
+ 146   1        for (i = 0; i < 8; i++)
+ 147   1        {
+ 148   2          value <<= 1;
+ 149   2          I2C_SCL_1();
+ 150   2          i2c_Delay();
+ 151   2          if (I2C_SDA_READ())
+ 152   2          {
+ 153   3            value++;
+ 154   3          }
+ 155   2          //I2C_SCL_1();
+ 156   2          //i2c_Delay();
+ 157   2          I2C_SCL_0();
+ 158   2          i2c_Delay();
+ 159   2        }
+ 160   1        
+ 161   1        I2C_SDA_OUTPUT(); // set data output  
+ 162   1        i2c_Delay();
+ 163   1        if(ack==0)
+ 164   1          i2c_NAck();
+ 165   1        else
+ 166   1          i2c_Ack();
+ 167   1        return value;
+ 168   1      }
+ 169          
+ 170          /*
+ 171          *********************************************************************************************************
+ 172          * ? ? ?: i2c_WaitAck
+ 173          * ????: CPU??????,??????ACK????
+ 174          * ?    ?:?
+ 175          * ? ? ?: ??0??????,1???????
+ 176          *********************************************************************************************************
+ 177          */
+ 178          unsigned char i2c_WaitAck(void)
+C51 COMPILER V9.56.0.0   QST_SW_I2C                                                        07/03/2018 13:34:10 PAGE 4   
+
+ 179          {
+ 180   1        unsigned char re;
+ 181   1      
+ 182   1        I2C_SDA_1();  /* CPU??SDA?? */
+ 183   1        I2C_SDA_INPUT();  //set data input
+ 184   1        i2c_Delay();
+ 185   1        I2C_SCL_1();  /* CPU??SCL = 1, ???????ACK?? */
+ 186   1        i2c_Delay();
+ 187   1        if (I2C_SDA_READ()) /* CPU??SDA???? */
+ 188   1        {
+ 189   2          re = 1;
+ 190   2        }
+ 191   1        else
+ 192   1        {
+ 193   2          re = 0;
+ 194   2        }
+ 195   1        I2C_SCL_0();
+ 196   1        I2C_SDA_OUTPUT(); //set data input
+ 197   1        i2c_Delay();
+ 198   1        return re;
+ 199   1      }
+ 200          
+ 201          /*
+ 202          *********************************************************************************************************
+ 203          * ? ? ?: i2c_Ack
+ 204          * ????: CPU????ACK??
+ 205          * ?    ?:?
+ 206          * ? ? ?: ?
+ 207          *********************************************************************************************************
+ 208          */
+ 209          void i2c_Ack(void)
+ 210          {
+ 211   1        I2C_SDA_0();  /* CPU??SDA = 0 */
+ 212   1        i2c_Delay();
+ 213   1        I2C_SCL_1();  /* CPU??1??? */
+ 214   1        i2c_Delay();
+ 215   1        I2C_SCL_0();
+ 216   1        i2c_Delay();
+ 217   1        I2C_SDA_1();  /* CPU??SDA?? */
+ 218   1      }
+ 219          
+ 220          /*
+ 221          *********************************************************************************************************
+ 222          * ? ? ?: i2c_NAck
+ 223          * ????: CPU??1?NACK??
+ 224          * ?    ?:?
+ 225          * ? ? ?: ?
+ 226          *********************************************************************************************************
+ 227          */
+ 228          void i2c_NAck(void)
+ 229          {
+ 230   1        I2C_SDA_1();  /* CPU??SDA = 1 */
+ 231   1        i2c_Delay();
+ 232   1        I2C_SCL_1();  /* CPU??1??? */
+ 233   1        i2c_Delay();
+ 234   1        I2C_SCL_0();
+ 235   1        i2c_Delay();  
+ 236   1      }
+ 237          
+ 238          /*
+ 239          *********************************************************************************************************
+ 240          * ? ? ?: i2c_GPIO_Config
+C51 COMPILER V9.56.0.0   QST_SW_I2C                                                        07/03/2018 13:34:10 PAGE 5   
+
+ 241          * ????: ??I2C???GPIO,????IO?????
+ 242          * ?    ?:?
+ 243          * ? ? ?: ?
+ 244          *********************************************************************************************************
+ 245          */
+ 246          void i2c_GPIO_Config(void)
+ 247          {
+ 248   1        i2c_Stop();
+ 249   1      }
+ 250          
+ 251          /*
+ 252          *********************************************************************************************************
+ 253          * ? ? ?: i2c_CheckDevice
+ 254          * ????: ??I2C????,CPU???????,??????????????????
+ 255          * ?    ?:_Address:???I2C????
+ 256          * ? ? ?: ??? 0 ????, ??1??????
+ 257          *********************************************************************************************************
+ 258          */
+ 259          unsigned char i2c_CheckDevice(unsigned char _Address)
+ 260          {
+ 261   1        unsigned char ucAck;
+ 262   1      
+ 263   1        QST_SW_I2C_ADDR_W = _Address;
+ 264   1        i2c_GPIO_Config();    /* ??GPIO */
+ 265   1        i2c_Start();    /* ?????? */
+ 266   1        /* ??????+????bit(0 = w, 1 = r) bit7 ?? */
+ 267   1        i2c_SendByte(_Address|I2C_WR);
+ 268   1        ucAck = i2c_WaitAck();  /* ?????ACK?? */
+ 269   1        i2c_Stop();     /* ?????? */
+ 270   1      
+ 271   1        return ucAck;
+ 272   1      }
+ 273          
+ 274          
+ 275          unsigned char qst_sw_writereg(unsigned char reg_add,unsigned char reg_dat)
+ 276          {
+ 277   1        i2c_Start();
+ 278   1        i2c_SendByte(QST_SW_I2C_ADDR_W);
+ 279   1        if(i2c_WaitAck())
+ 280   1        {
+ 281   2          return 0;
+ 282   2        }
+ 283   1        i2c_SendByte(reg_add);  
+ 284   1        if(i2c_WaitAck())
+ 285   1        {
+ 286   2          return 0;
+ 287   2        }
+ 288   1        i2c_SendByte(reg_dat);  
+ 289   1        if(i2c_WaitAck())
+ 290   1        {
+ 291   2          return 0;
+ 292   2        }
+ 293   1        i2c_Stop();
+ 294   1      
+ 295   1        return 1;
+ 296   1      }
+ 297          
+ 298          unsigned char qst_sw_readreg(unsigned char reg_add,unsigned char *buf,unsigned char num)
+ 299          {
+ 300   1        //unsigned char ret;
+ 301   1        unsigned char i;
+ 302   1      
+C51 COMPILER V9.56.0.0   QST_SW_I2C                                                        07/03/2018 13:34:10 PAGE 6   
+
+ 303   1        i2c_Start();
+ 304   1        i2c_SendByte(QST_SW_I2C_ADDR_W);
+ 305   1        if(i2c_WaitAck())
+ 306   1        {
+ 307   2          return 0;
+ 308   2        }
+ 309   1        i2c_SendByte(reg_add);
+ 310   1        if(i2c_WaitAck())
+ 311   1        {
+ 312   2          return 0;
+ 313   2        }
+ 314   1      
+ 315   1        i2c_Start();
+ 316   1        i2c_SendByte(QST_SW_I2C_ADDR_W+1);    // QST_SW_I2C_ADDR_R
+ 317   1        if(i2c_WaitAck())
+ 318   1        {
+ 319   2          return 0;
+ 320   2        }
+ 321   1      
+ 322   1        for(i=0;i<(num-1);i++){
+ 323   2          *buf=i2c_ReadByte(1);
+ 324   2          buf++;
+ 325   2        }
+ 326   1        *buf=i2c_ReadByte(0);
+ 327   1        i2c_Stop();
+ 328   1      
+ 329   1        return 1;
+ 330   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    367    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      2       7
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

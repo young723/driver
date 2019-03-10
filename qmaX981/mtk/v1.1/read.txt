@@ -1,0 +1,1 @@
+for mtk android 4.4

@@ -1,0 +1,346 @@
+BL51 BANKED LINKER/LOCATER V6.22                                                        07/03/2018  13:57:58  PAGE 1
+
+
+BL51 BANKED LINKER/LOCATER V6.22, INVOKED BY:
+C:\KEIL_V5\C51\BIN\BL51.EXE .\Objects\STARTUP.obj, .\Objects\main.obj, .\Objects\qst_sw_i2c.obj, .\Objects\qst_uart.obj,
+>>  .\Objects\qmaX981.obj TO .\Objects\qst PRINT (.\Listings\qst.m51) RAMSIZE (256)
+
+
+MEMORY MODEL: SMALL
+
+
+INPUT MODULES INCLUDED:
+  .\Objects\STARTUP.obj (?C_STARTUP)
+  .\Objects\main.obj (MAIN)
+  .\Objects\qst_sw_i2c.obj (QST_SW_I2C)
+  .\Objects\qst_uart.obj (QST_UART)
+  .\Objects\qmaX981.obj (QMAX981)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C_INIT)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?COPY)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?CLDPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?CSTPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?IMUL)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?SIDIV)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?ILDPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?ILDOPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?IILDOPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?ISTPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?ISTOPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?MEMSET)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (VSPRINTF)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?UIDIV)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?IILDX)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (PRINTF)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?CLDOPTR)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?PLDIIDATA)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?CCASE)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (PUTCHAR)
+
+
+LINK MAP OF MODULE:  .\Objects\qst (?C_STARTUP)
+
+
+            TYPE    BASE      LENGTH    RELOCATION   SEGMENT NAME
+            -----------------------------------------------------
+
+            * * * * * * *   D A T A   M E M O R Y   * * * * * * *
+            REG     0000H     0008H     ABSOLUTE     "REG BANK 0"
+            DATA    0008H     0014H     UNIT         ?DT?QMAX981
+            DATA    001CH     0002H     UNIT         ?DT?QST_SW_I2C
+            DATA    001EH     0001H     UNIT         ?DT?MAIN
+            DATA    001FH     0001H     UNIT         ?DT?QST_UART
+            BIT     0020H.0   0001H.1   UNIT         _BIT_GROUP_
+                    0021H.1   0000H.7                *** GAP ***
+            DATA    0022H     0044H     UNIT         _DATA_GROUP_
+            DATA    0066H     000BH     UNIT         ?DT?_QMAX981_READ_ACC?QMAX981
+            IDATA   0071H     0001H     UNIT         ?STACK
+
+            * * * * * * *  X D A T A   M E M O R Y  * * * * * * *
+            XDATA   0000H     0094H     UNIT         ?XD?QMAX981
+            XDATA   0094H     003CH     UNIT         _XDATA_GROUP_
+
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/03/2018  13:57:58  PAGE 2
+
+
+            * * * * * * *   C O D E   M E M O R Y   * * * * * * *
+            CODE    0000H     0003H     ABSOLUTE     
+            CODE    0003H     0003H     ABSOLUTE     
+            CODE    0006H     000DH     UNIT         ?PR?INT0_HANDLE?MAIN
+            CODE    0013H     0003H     ABSOLUTE     
+            CODE    0016H     000DH     UNIT         ?PR?INT1_HANDLE?MAIN
+            CODE    0023H     0003H     ABSOLUTE     
+            CODE    0026H     035FH     UNIT         ?C?LIB_CODE
+            CODE    0385H     035CH     UNIT         ?PR?PRINTF?PRINTF
+            CODE    06E1H     015AH     UNIT         ?PR?_QMA6981_READ_RAW_XYZ?QMAX981
+            CODE    083BH     011CH     UNIT         ?PR?QMAX981_INIT?QMAX981
+            CODE    0957H     00E3H     UNIT         ?PR?_QMAX981_READ_ACC?QMAX981
+            CODE    0A3AH     00DFH     UNIT         ?CO?QMAX981
+            CODE    0B19H     00CFH     UNIT         ?PR?QMA7981_INITIALIZE?QMAX981
+            CODE    0BE8H     00C1H     UNIT         ?PR?QMA6981_INITIALIZE?QMAX981
+            CODE    0CA9H     00BCH     UNIT         ?PR?_QMA7981_READ_RAW_XYZ?QMAX981
+            CODE    0D65H     00AEH     UNIT         ?C_INITSEG
+            CODE    0E13H     008CH     UNIT         ?C_C51STARTUP
+            CODE    0E9FH     0072H     UNIT         ?PR?_QST_SW_READREG?QST_SW_I2C
+            CODE    0F11H     004BH     UNIT         ?PR?_QST_LOG?QST_UART
+            CODE    0F5CH     004AH     UNIT         ?PR?MAIN?MAIN
+            CODE    0FA6H     0033H     UNIT         ?PR?_I2C_READBYTE?QST_SW_I2C
+            CODE    0FD9H     0031H     UNIT         ?CO?MAIN
+            CODE    100AH     002FH     UNIT         ?PR?_QST_SW_WRITEREG?QST_SW_I2C
+            CODE    1039H     002EH     UNIT         ?PR?_VSPRINTF?VSPRINTF
+            CODE    1067H     002DH     UNIT         ?PR?_QMAX981_READ_RAW?QMAX981
+            CODE    1094H     002AH     UNIT         ?PR?QMAX981_CHIP_ID?QMAX981
+            CODE    10BEH     0027H     UNIT         ?PR?PUTCHAR?PUTCHAR
+            CODE    10E5H     0024H     UNIT         ?PR?_I2C_SENDBYTE?QST_SW_I2C
+            CODE    1109H     0020H     UNIT         ?PR?_QMAX981_DELAY?QMAX981
+            CODE    1129H     001DH     UNIT         ?PR?UART_INIT?QST_UART
+            CODE    1146H     001CH     UNIT         ?PR?I2C_WAITACK?QST_SW_I2C
+            CODE    1162H     001AH     UNIT         ?PR?_I2C_CHECKDEVICE?QST_SW_I2C
+            CODE    117CH     0018H     UNIT         ?PR?_UART_SEND_STRING?QST_UART
+            CODE    1194H     0011H     UNIT         ?PR?I2C_START?QST_SW_I2C
+            CODE    11A5H     000EH     UNIT         ?PR?_DELAY?MAIN
+            CODE    11B3H     000EH     UNIT         ?PR?I2C_DELAY?QST_SW_I2C
+            CODE    11C1H     000EH     UNIT         ?PR?_QMAX981_READREG?QMAX981
+            CODE    11CFH     000DH     UNIT         ?PR?I2C_ACK?QST_SW_I2C
+            CODE    11DCH     000CH     UNIT         ?PR?UART?QST_UART
+            CODE    11E8H     000BH     UNIT         ?PR?_QMAX981_WRITEREG?QMAX981
+            CODE    11F3H     000AH     UNIT         ?PR?I2C_STOP?QST_SW_I2C
+            CODE    11FDH     0008H     UNIT         ?PR?I2C_NACK?QST_SW_I2C
+            CODE    1205H     0007H     UNIT         ?PR?INT0INIT?MAIN
+            CODE    120CH     0007H     UNIT         ?PR?INT1INIT?MAIN
+            CODE    1213H     0003H     UNIT         ?PR?I2C_GPIO_CONFIG?QST_SW_I2C
+
+
+
+OVERLAY MAP OF MODULE:   .\Objects\qst (?C_STARTUP)
+
+
+SEGMENT                                      BIT_GROUP          DATA_GROUP          XDATA_GROUP
+  +--> CALLED SEGMENT                     START    LENGTH     START    LENGTH     START    LENGTH
+-------------------------------------------------------------------------------------------------
+?C_C51STARTUP                             -----    -----      -----    -----      -----    -----
+  +--> ?PR?MAIN?MAIN
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/03/2018  13:57:58  PAGE 3
+
+
+  +--> ?C_INITSEG
+
+?PR?MAIN?MAIN                             -----    -----      0022H    0007H      -----    -----
+  +--> ?PR?UART_INIT?QST_UART
+  +--> ?PR?INT0INIT?MAIN
+  +--> ?PR?INT1INIT?MAIN
+  +--> ?CO?MAIN
+  +--> ?PR?_QST_LOG?QST_UART
+  +--> ?PR?QMAX981_INIT?QMAX981
+  +--> ?PR?_QMAX981_READ_RAW?QMAX981
+  +--> ?PR?_QMAX981_READREG?QMAX981
+  +--> ?PR?_DELAY?MAIN
+
+?PR?_QST_LOG?QST_UART                     -----    -----      0037H    0015H      0094H    003CH
+  +--> ?PR?_VSPRINTF?VSPRINTF
+  +--> ?PR?_UART_SEND_STRING?QST_UART
+
+?PR?_VSPRINTF?VSPRINTF                    -----    -----      004CH    0006H      -----    -----
+  +--> ?PR?PRINTF?PRINTF
+
+?PR?PRINTF?PRINTF                         0020H.0  0001H.1    0052H    0014H      -----    -----
+  +--> ?PR?PUTCHAR?PUTCHAR
+
+?PR?QMAX981_INIT?QMAX981                  -----    -----      0029H    0002H      -----    -----
+  +--> ?PR?_I2C_CHECKDEVICE?QST_SW_I2C
+  +--> ?PR?_QMAX981_DELAY?QMAX981
+  +--> ?PR?QMAX981_CHIP_ID?QMAX981
+  +--> ?CO?QMAX981
+  +--> ?PR?_QST_LOG?QST_UART
+  +--> ?PR?QMA6981_INITIALIZE?QMAX981
+  +--> ?PR?QMA7981_INITIALIZE?QMAX981
+
+?PR?_I2C_CHECKDEVICE?QST_SW_I2C           -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_GPIO_CONFIG?QST_SW_I2C
+  +--> ?PR?I2C_START?QST_SW_I2C
+  +--> ?PR?_I2C_SENDBYTE?QST_SW_I2C
+  +--> ?PR?I2C_WAITACK?QST_SW_I2C
+  +--> ?PR?I2C_STOP?QST_SW_I2C
+
+?PR?I2C_GPIO_CONFIG?QST_SW_I2C            -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_STOP?QST_SW_I2C
+
+?PR?I2C_STOP?QST_SW_I2C                   -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_DELAY?QST_SW_I2C
+
+?PR?I2C_START?QST_SW_I2C                  -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_DELAY?QST_SW_I2C
+
+?PR?_I2C_SENDBYTE?QST_SW_I2C              -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_DELAY?QST_SW_I2C
+
+?PR?I2C_WAITACK?QST_SW_I2C                -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_START?QST_SW_I2C
+  +--> ?PR?_I2C_SENDBYTE?QST_SW_I2C
+  +--> ?PR?I2C_DELAY?QST_SW_I2C
+
+?PR?QMAX981_CHIP_ID?QMAX981               -----    -----      002BH    0001H      -----    -----
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/03/2018  13:57:58  PAGE 4
+
+
+  +--> ?PR?_QMAX981_WRITEREG?QMAX981
+  +--> ?PR?_QMAX981_READREG?QMAX981
+  +--> ?CO?QMAX981
+  +--> ?PR?_QST_LOG?QST_UART
+
+?PR?_QMAX981_WRITEREG?QMAX981             -----    -----      0033H    0001H      -----    -----
+  +--> ?PR?_QST_SW_WRITEREG?QST_SW_I2C
+
+?PR?_QST_SW_WRITEREG?QST_SW_I2C           -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_WAITACK?QST_SW_I2C
+  +--> ?PR?_I2C_SENDBYTE?QST_SW_I2C
+  +--> ?PR?I2C_STOP?QST_SW_I2C
+
+?PR?_QMAX981_READREG?QMAX981              -----    -----      0037H    0005H      -----    -----
+  +--> ?PR?_QST_SW_READREG?QST_SW_I2C
+
+?PR?_QST_SW_READREG?QST_SW_I2C            -----    -----      003CH    0006H      -----    -----
+  +--> ?PR?I2C_WAITACK?QST_SW_I2C
+  +--> ?PR?_I2C_SENDBYTE?QST_SW_I2C
+  +--> ?PR?I2C_START?QST_SW_I2C
+  +--> ?PR?_I2C_READBYTE?QST_SW_I2C
+  +--> ?PR?I2C_STOP?QST_SW_I2C
+
+?PR?_I2C_READBYTE?QST_SW_I2C              -----    -----      0042H    0001H      -----    -----
+  +--> ?PR?I2C_DELAY?QST_SW_I2C
+  +--> ?PR?I2C_NACK?QST_SW_I2C
+  +--> ?PR?I2C_ACK?QST_SW_I2C
+
+?PR?I2C_NACK?QST_SW_I2C                   -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_DELAY?QST_SW_I2C
+
+?PR?I2C_ACK?QST_SW_I2C                    -----    -----      -----    -----      -----    -----
+  +--> ?PR?I2C_DELAY?QST_SW_I2C
+
+?PR?QMA6981_INITIALIZE?QMAX981            -----    -----      002BH    0008H      -----    -----
+  +--> ?CO?QMAX981
+  +--> ?PR?_QMAX981_WRITEREG?QMAX981
+  +--> ?PR?_QST_LOG?QST_UART
+  +--> ?PR?_QMAX981_DELAY?QMAX981
+
+?PR?QMA7981_INITIALIZE?QMAX981            -----    -----      002BH    0008H      -----    -----
+  +--> ?CO?QMAX981
+  +--> ?PR?_QMAX981_WRITEREG?QMAX981
+  +--> ?PR?_QST_LOG?QST_UART
+  +--> ?PR?_QMAX981_DELAY?QMAX981
+
+?PR?_QMAX981_READ_RAW?QMAX981             -----    -----      0029H    0005H      -----    -----
+  +--> ?PR?_QMA6981_READ_RAW_XYZ?QMAX981
+  +--> ?PR?_QMA7981_READ_RAW_XYZ?QMAX981
+
+?PR?_QMA6981_READ_RAW_XYZ?QMAX981         -----    -----      002EH    0009H      -----    -----
+  +--> ?CO?QMAX981
+  +--> ?PR?_QMAX981_READREG?QMAX981
+  +--> ?PR?_QST_LOG?QST_UART
+
+?PR?_QMA7981_READ_RAW_XYZ?QMAX981         -----    -----      002EH    0009H      -----    -----
+  +--> ?CO?QMAX981
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/03/2018  13:57:58  PAGE 5
+
+
+  +--> ?PR?_QMAX981_READREG?QMAX981
+  +--> ?PR?_QST_LOG?QST_UART
+
+
+
+SYMBOL TABLE OF MODULE:  .\Objects\qst (?C_STARTUP)
+
+  VALUE           TYPE          NAME
+  ----------------------------------
+
+  -------         MODULE        ?C?COPY
+  C:00F6H         PUBLIC        ?C?COPY
+  -------         ENDMOD        ?C?COPY
+
+  -------         MODULE        ?C?CLDPTR
+  C:011CH         PUBLIC        ?C?CLDPTR
+  -------         ENDMOD        ?C?CLDPTR
+
+  -------         MODULE        ?C?CSTPTR
+  C:0135H         PUBLIC        ?C?CSTPTR
+  -------         ENDMOD        ?C?CSTPTR
+
+  -------         MODULE        ?C?IMUL
+  C:0147H         PUBLIC        ?C?IMUL
+  -------         ENDMOD        ?C?IMUL
+
+  -------         MODULE        ?C?SIDIV
+  C:0159H         PUBLIC        ?C?SIDIV
+  -------         ENDMOD        ?C?SIDIV
+
+  -------         MODULE        ?C?ILDPTR
+  C:018FH         PUBLIC        ?C?ILDPTR
+  -------         ENDMOD        ?C?ILDPTR
+
+  -------         MODULE        ?C?ILDOPTR
+  C:01BAH         PUBLIC        ?C?ILDOPTR
+  -------         ENDMOD        ?C?ILDOPTR
+
+  -------         MODULE        ?C?IILDOPTR
+  C:01F2H         PUBLIC        ?C?IILDOPTR
+  -------         ENDMOD        ?C?IILDOPTR
+
+  -------         MODULE        ?C?ISTPTR
+  C:023FH         PUBLIC        ?C?ISTPTR
+  -------         ENDMOD        ?C?ISTPTR
+
+  -------         MODULE        ?C?ISTOPTR
+  C:025EH         PUBLIC        ?C?ISTOPTR
+  -------         ENDMOD        ?C?ISTOPTR
+
+  -------         MODULE        ?C?MEMSET
+  C:028BH         PUBLIC        ?C?MEMSET
+  -------         ENDMOD        ?C?MEMSET
+
+  -------         MODULE        VSPRINTF
+  D:0049H         PUBLIC        ?_VSPRINTF?BYTE
+  C:1039H         PUBLIC        _VSPRINTF
+BL51 BANKED LINKER/LOCATER V6.22                                                      07/03/2018  13:57:58  PAGE 6
+
+
+  -------         ENDMOD        VSPRINTF
+
+  -------         MODULE        ?C?UIDIV
+  C:02B7H         PUBLIC        ?C?UIDIV
+  -------         ENDMOD        ?C?UIDIV
+
+  -------         MODULE        ?C?IILDX
+  C:030CH         PUBLIC        ?C?IILDX
+  -------         ENDMOD        ?C?IILDX
+
+  -------         MODULE        PRINTF
+  D:0052H         PUBLIC        ?_PRINTF517?BYTE
+  D:0052H         PUBLIC        ?_PRINTF?BYTE
+  D:0052H         PUBLIC        ?_SPRINTF517?BYTE
+  D:0052H         PUBLIC        ?_SPRINTF?BYTE
+  C:03E7H         PUBLIC        _PRINTF
+  C:03E7H         PUBLIC        _PRINTF517
+  C:03E1H         PUBLIC        _SPRINTF
+  C:03E1H         PUBLIC        _SPRINTF517
+  -------         ENDMOD        PRINTF
+
+  -------         MODULE        ?C?CLDOPTR
+  C:0322H         PUBLIC        ?C?CLDOPTR
+  -------         ENDMOD        ?C?CLDOPTR
+
+  -------         MODULE        ?C?PLDIIDATA
+  C:034FH         PUBLIC        ?C?PLDIIDATA
+  -------         ENDMOD        ?C?PLDIIDATA
+
+  -------         MODULE        ?C?CCASE
+  C:035FH         PUBLIC        ?C?CCASE
+  -------         ENDMOD        ?C?CCASE
+
+  -------         MODULE        PUTCHAR
+  C:10BEH         PUBLIC        _PUTCHAR
+  -------         ENDMOD        PUTCHAR
+
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_QMAX981_READ_ACC?QMAX981
+
+Program Size: data=113.1 xdata=208 code=4630
+LINK/LOCATE RUN COMPLETE.  1 WARNING(S),  0 ERROR(S)

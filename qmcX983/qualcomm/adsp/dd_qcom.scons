@@ -1,0 +1,26 @@
+	
+	......
+	......
+	......
+	
+#-------------------------------------------------------------------------------
+# Sources, libraries
+#-------------------------------------------------------------------------------
+if env.has_key('SNS_QDSP_SIM'):
+   DD_SOURCES = [
+      "${BUILDPATH}/sns_dd_qdsp_playback.c",
+   ]
+else:
+   DD_SOURCES = [
+     ......
+	 
+     "${BUILDPATH}/qmcx983/sns_dd_mag_qmc7983.c",
+     "${BUILDPATH}/qmcx983/sns_dd_mag_qmc7983_uimg.c",
+	
+	......
+
+   ]
+	
+	......
+	......
+

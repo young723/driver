@@ -1,0 +1,74 @@
+﻿MTK 安卓6.0 7.0
+加速度相关部分
+1. accelerometer文件夹下面添加qmaX981文件夹，里面包含qmaX981.c qmaX981.h qmaX981_algo.c文件
+
+2. 添加这个文件的make文件 Kconfig 、Makefile文件
+
+3. 项目dts文件里面添加
+/* sensor standardization */
+		cust_accel@1 {
+		compatible = "mediatek,qmaX981";
+		i2c_num	= <2>;
+		i2c_addr = <0x12 0 0 0>;
+		direction = <1>;
+		power_id = <0xffff>;
+		power_vol = <0>;
+		firlen = <0>;
+		is_batch_supported = <0>;
+		status="okay";
+		};
+
+
+计步器相关部分
+
+1.系统defconfig文件中打开	CONFIG_CUSTOM_KERNEL_STEP_COUNTER=y
+
+2. dts文件里面添加
+step_counter {
+        compatible = "mediatek,step_counter";
+       };
+
+    m_step_c_pl {
+        compatible = "mediatek,m_step_c_pl";
+       };
+
+	 
+3. 优化step_counter.c step_counter.h 
+针对6个sysfs节点
+step_cenablenodata
+step_cactive
+step_cdelay
+step_cbatch
+step_cflush
+step_cdevnum
+
+这些节点要在init.mt6535.rc文件（加速度相关的权限文件也在里面）里面添加读写的权限
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cenablenodata
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cactive
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cdelay
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cbatch
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cflush
+chown system system /sys/class/misc/m_step_c_misc/step_cenablenodata
+chown system system /sys/class/misc/m_step_c_misc/step_cactive
+chown system system /sys/class/misc/m_step_c_misc/step_cdelay
+chown system system /sys/class/misc/m_step_c_misc/step_cbatch
+chown system system /sys/class/misc/m_step_c_misc/step_cflush
+    
+    
+    
+
+4. 使用计步器中断使用中断滤波打开开QMAX981_STEP_DEBOUNCE_IN_INT，并确认硬件配置
+DTS文件中关于中断部分如下：
+cust_eint.dtsi
+GSE_1@1 {
+		compatible = "mediatek, GSE_1-eint";
+		interrupt-parent = <&eintc>;
+		interrupts = <66 4>;
+		debounce = <66 0>;
+	};
+	
+mt6735.dtsi文件里面添加
+	gse_1: gse_1 {
+		compatible = "mediatek, gse_1-eint";
+		status = "okay";
+	};

@@ -1,0 +1,111 @@
+diff --git a/common/rootdir/root/init.sc8830.rc b/common/rootdir/root/init.sc8830.rc
+index f303c5a..da54391 100644
+--- a/common/rootdir/root/init.sc8830.rc
++++ b/common/rootdir/root/init.sc8830.rc
+@@ -251,6 +251,16 @@ on boot
+     #if dirty pages more than 4M that will tigger writeback flush
+     write /proc/sys/vm/dirty_background_bytes 4194304
+ 
++      chown system system /sys/class/compass/qmcX983/delay_mag
++      chown system system /sys/class/compass/qmcX983/direction
++      chown system system /sys/class/compass/qmcX983/enable_mag
++      chown system system /sys/class/compass/qmcX983/otp
++      chmod 0660 /dev/msensor
++      chmod 0660 /dev/qmcX983
++      chown system system /dev/msensor
++      chown system system /dev/qmcX983
++
++
+ on charger
+     class_start core
+     start console
+diff --git a/common/rootdir/root/init.sc8830_ieb.rc b/common/rootdir/root/init.sc8830_ieb.rc
+index 0b0137c..3939025 100644
+--- a/common/rootdir/root/init.sc8830_ieb.rc
++++ b/common/rootdir/root/init.sc8830_ieb.rc
+@@ -240,6 +240,17 @@ on boot
+     #if dirty pages more than 4M that will tigger writeback flush
+     write /proc/sys/vm/dirty_background_bytes 4194304
+ 
++      chown system system /sys/class/compass/qmcX983/delay_mag
++      chown system system /sys/class/compass/qmcX983/direction
++      chown system system /sys/class/compass/qmcX983/enable_mag
++      chown system system /sys/class/compass/qmcX983/otp
++      chmod 0660 /dev/msensor
++      chmod 0660 /dev/qmcX983
++      chown system system /dev/msensor
++      chown system system /dev/qmcX983
++
++
++
+ on charger
+     class_start core
+     start console
+diff --git a/common/rootdir/root/ueventd.sc8830.rc b/common/rootdir/root/ueventd.sc8830.rc
+index 78dabe0..a60b443 100644
+--- a/common/rootdir/root/ueventd.sc8830.rc
++++ b/common/rootdir/root/ueventd.sc8830.rc
+@@ -75,6 +75,9 @@
+ /dev/mmc31xx            0666     system      compass
+ /dev/al3006_pls         0666     system      system
+ /dev/lis3dh_acc         0660     system      system
++/dev/qmax981            0660     system      system
++/dev/msensor            0660     system      system
++/dev/qmcX983           0660     system      system
+ /dev/akm8975_dev        0660     system      system
+ /dev/ts0710mux*         0660     radio       system
+ /dev/ltr_558als         0660     system      system
+diff --git a/common/sepolicy/file_contexts b/common/sepolicy/file_contexts
+index f338795..d5e2fb3 100644
+--- a/common/sepolicy/file_contexts
++++ b/common/sepolicy/file_contexts
+@@ -13,6 +13,9 @@
+ /dev/rtc0               u:object_r:refnotify_device:s0
+ /dev/sprd_gsp           u:object_r:graphics_device:s0
+ /dev/lis3dh_acc         u:object_r:sensors_device:s0
++/dev/qmax981            u:object_r:sensors_device:s0
++/dev/msensor            u:object_r:sensors_device:s0
++/dev/qmcX983            u:object_r:sensors_device:s0
+ /dev/ltr_558als         u:object_r:sensors_device:s0
+ /dev/sprd_sensor        u:object_r:sensors_device:s0
+ /dev/sprd_rotation      u:object_r:sensors_device:s0
+diff --git a/sp9832a_2h11/BoardConfig.mk b/sp9832a_2h11/BoardConfig.mk
+index 9da159e..4aefaa5 100644
+--- a/sp9832a_2h11/BoardConfig.mk
++++ b/sp9832a_2h11/BoardConfig.mk
+@@ -127,10 +127,14 @@ WIFI_DRIVER_MODULE_NAME     := "sprdwl"
+ # select sensor
+ #USE_INVENSENSE_LIB := true
+ USE_SPRD_SENSOR_LIB := true
+-BOARD_HAVE_ACC := Lis3dh
++#BOARD_HAVE_ACC := Lis3dh
++#BOARD_HAVE_ACC := NULL
++BOARD_HAVE_ACC := qmax981
+ BOARD_ACC_INSTALL := 6
+-BOARD_HAVE_ORI := NULL
+-BOARD_ORI_INSTALL := NULL
++#BOARD_HAVE_ORI := NULL
++BOARD_HAVE_ORI := QMC
++#BOARD_ORI_INSTALL := NULL
++BOARD_ORI_INSTALL := 6
+ BOARD_HAVE_PLS := EPL2182
+ BOARD_PLS_COMPATIBLE := true
+ 
+diff --git a/sp9832a_2h11/sp9832a_2h11_4m.mk b/sp9832a_2h11/sp9832a_2h11_4m.mk
+index cd2b09e..2e59506 100644
+--- a/sp9832a_2h11/sp9832a_2h11_4m.mk
++++ b/sp9832a_2h11/sp9832a_2h11_4m.mk
+@@ -130,9 +130,12 @@ PRODUCT_COPY_FILES += \
+ 	frameworks/native/data/etc/android.hardware.sensor.light.xml:system/etc/permissions/android.hardware.sensor.light.xml \
+ 	frameworks/native/data/etc/android.hardware.sensor.proximity.xml:system/etc/permissions/android.hardware.sensor.proximity.xml \
+ 	frameworks/native/data/etc/android.hardware.sensor.accelerometer.xml:system/etc/permissions/android.hardware.sensor.accelerometer.xml\
++        frameworks/native/data/etc/android.hardware.sensor.compass.xml:system/etc/permissions/android.hardware.sensor.compass.xml\
+ 	frameworks/native/data/etc/android.hardware.camera.flash.xml:system/etc/permissions/android.hardware.camera.flash.xml \
+     frameworks/native/data/etc/android.software.midi.xml:system/etc/permissions/android.software.midi.xml \
+-	frameworks/native/data/etc/android.hardware.camera.autofocus.xml:system/etc/permissions/android.hardware.camera.autofocus.xml
++	frameworks/native/data/etc/android.hardware.camera.autofocus.xml:system/etc/permissions/android.hardware.camera.autofocus.xml \
++
++
+ #	hardware/broadcom/libbt/conf/bcm/firmware/bcm4343s/bcm4343.hcd:system/vendor/firmware/bcm4343.hcd
+ 
+ $(call inherit-product-if-exists, vendor/sprd/open-source/common_packages.mk)

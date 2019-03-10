@@ -1,0 +1,5 @@
+
+# /sys/class/input/input1
+type sys_input1_file, fs_type, sysfs_type;
+
+

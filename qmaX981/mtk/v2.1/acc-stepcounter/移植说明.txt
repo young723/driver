@@ -1,0 +1,95 @@
+﻿MTK 安卓6.0 7.0
+加速度相关部分
+1. accelerometer文件夹下面添加qma6981文件夹，里面包含qma6981.c、qma6981.h文件
+
+2. 添加这个文件的make文件 Kconfig 、Makefile文件
+
+3. 项目dts文件里面添加
+/* sensor standardization */
+		cust_accel@1 {
+		compatible = "mediatek,qma6981";
+		i2c_num	= <2>;
+		i2c_addr = <0x12 0 0 0>;
+		direction = <1>;
+		power_id = <0xffff>;
+		power_vol = <0>;
+		firlen = <0>;
+		is_batch_supported = <0>;
+		status="okay";
+		};
+		
+/* sensor gpio standization */
+&pio {
+		QMA6981_pins_default:eintdefault {
+		};
+		QMA6981_pins_eint_int:eintconfig {
+			pins_cmd_dat {
+				pins = <PINMUX_GPIOn__FUNC_GPIOn>;
+				slew-rate = <0>;
+				bias-disable;
+				};
+			};
+};
+		
+/* qma6981  interrupt setting*/		
+&gsensor {
+		pinctrl-names = "default", "qma6981_eint_as_int";  
+		pinctrl-0 = <&QMA6981_pins_default>;
+		pinctrl-1 = <&QMA6981_pins_eint_int>;
+		status = "okay";    
+};
+
+
+
+计步器相关部分
+
+1.需要计步器功能要开QMA6981_STEP_COUNTER这个宏，系统make文件里面有关step_counter宏要开启
+
+2. dts文件里面添加
+step_counter {
+        compatible = "mediatek,step_counter";
+       };
+
+    m_step_c_pl {
+        compatible = "mediatek,m_step_c_pl";
+       };
+
+	 
+3. 优化step_counter.c step_counter.h 
+针对6个sysfs节点
+step_cenablenodata
+step_cactive
+step_cdelay
+step_cbatch
+step_cflush
+step_cdevnum
+
+这些节点要在init.mt6535.rc文件（加速度相关的权限文件也在里面）里面添加读写的权限
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cenablenodata
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cactive
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cdelay
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cbatch
+chmod 0660 /sys/class/misc/m_step_c_misc/step_cflush
+chown system system /sys/class/misc/m_step_c_misc/step_cenablenodata
+chown system system /sys/class/misc/m_step_c_misc/step_cactive
+chown system system /sys/class/misc/m_step_c_misc/step_cdelay
+chown system system /sys/class/misc/m_step_c_misc/step_cbatch
+chown system system /sys/class/misc/m_step_c_misc/step_cflush
+    
+    
+    
+
+4. 使用计步器中断使用中断滤波开QMA6981_STEP_COUNTER_USE_INT，还需要配置DTS文件
+cust_eint.dtsi文件里面添加
+GSE_1@1 {
+		compatible = "mediatek, GSE_1-eint";
+		interrupt-parent = <&eintc>;
+		interrupts = <1 8>;
+		debounce = <1 0>;
+	};
+	
+mt6735.dtsi文件里面添加
+	gse_1: gse_1 {
+		compatible = "mediatek, gse_1-eint";
+		status = "okay";
+	};

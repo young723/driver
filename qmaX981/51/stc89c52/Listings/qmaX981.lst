@@ -1,0 +1,857 @@
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 1   
+
+
+C51 COMPILER V9.56.0.0, COMPILATION OF MODULE QMAX981
+OBJECT MODULE PLACED IN .\Objects\qmaX981.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE qmaX981\qmaX981.c OPTIMIZE(8,SPEED) BROWSE PRINT(.\Listings\qmaX981.lst)
+                    - TABS(2) OBJECT(.\Objects\qmaX981.obj)
+
+line level    source
+
+   1          /**
+   2            ******************************************************************************
+   3            * @file    qma7981.c
+   4            * @author  Yangzhiqiang@qst
+   5            * @version V1.0
+   6            * @date    2017-12-15
+   7            * @brief    qma6981驱动
+   8            ******************************************************************************
+   9            * @attention
+  10            *
+  11            * 实验平台:秉火 指南者 开发板 
+  12            * 论坛    :http://www.firebbs.cn
+  13            * 淘宝    :https://fire-stm32.taobao.com
+  14            *
+  15            ******************************************************************************
+  16            */ 
+  17          #include <REGX52.H>
+  18          
+  19          #include "qmaX981.h"
+  20          
+  21          //#include <stdbool.h>
+  22          #include <string.h>
+  23          
+  24          extern void qst_log(const char *format, ...);
+  25            
+  26          #define QMAX981_LOG   qst_log
+  27          #define QMAX981_ERR   qst_log
+  28          //#define QMAX981_USE_SPI
+  29          
+  30          #if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
+              extern void qmaX981_step_debounce_reset(void);
+              extern int qmaX981_step_debounce_int_work(int data_buf, unsigned char irq_level);
+              extern int qmaX981_step_debounce_read_data(int result);
+              #endif
+  35          #if defined(QMAX981_CHECK_ABNORMAL_DATA)
+              extern int qmaX981_check_abnormal_data(int data_in, int *data_out);
+              #endif
+  38          
+  39          #if defined(QMAX981_USE_SPI)
+              extern u8 qmaX981_spi_read(u8 addr, u8* buff, u8 len);
+              extern void qmaX981_spi_write(u8 addr,u8 data);
+              extern void Spi_Init(void);
+              extern void spi_sw_Init(void);
+              extern void MYSPI_Init(void);
+              #endif
+  46          
+  47          typedef enum
+  48          { 
+  49            CHIP_TYPE_QMA6981 = 0,
+  50            CHIP_TYPE_QMA7981,
+  51            CHIP_TYPE_UNDEFINE,
+  52            CHIP_TYPE_MAX
+  53          }qmaX981_type;
+  54          
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 2   
+
+  55          typedef struct
+  56          {
+  57              s16 sign[3];
+  58              u16 map[3];
+  59          }qst_convert;
+  60          
+  61          typedef struct
+  62          {
+  63            u8          chip_id;
+  64            qmaX981_type    chip_type;
+  65            s32         lsb_1g;
+  66            u8          layout;
+  67            qst_convert     cvt;
+  68            u8          int_level;
+  69          }qmaX981_data;
+  70          
+  71          static const qst_convert xdata qst_map[] = 
+  72          {
+  73              { { 1, 1, 1}, {0, 1, 2} },
+  74              { {-1, 1, 1}, {1, 0, 2} },
+  75              { {-1,-1, 1}, {0, 1, 2} },
+  76              { { 1,-1, 1}, {1, 0, 2} },
+  77          
+  78              { {-1, 1, -1}, {0, 1, 2} },
+  79              { { 1, 1, -1}, {1, 0, 2} },
+  80              { { 1,-1, -1}, {0, 1, 2} },
+  81              { {-1,-1, -1}, {1, 0, 2} }
+  82          };
+  83          
+  84          
+  85          static qmaX981_data g_qmaX981;
+  86          
+  87          //#define QMAX981_I2C_ADDR_W    QMAX981_ACC_I2C_ADDRESS
+  88          //#define QMAX981_I2C_ADDR_R    QMAX981_ACC_I2C_ADDRESS|0x01
+  89          static unsigned char QMAX981_I2C_ADDR_W = QMAX981_ACC_I2C_ADDRESS;
+  90          static unsigned char QMAX981_I2C_ADDR_R = QMAX981_ACC_I2C_ADDRESS|0x01;
+  91          
+  92          const unsigned char xdata qma6981_init_tbl[][2] = 
+  93          {
+  94          #if defined(QMAX981_STEP_COUNTER)
+                {0x11, 0x80},
+                {0x36, 0xb6},
+                {0xff, 5},
+                {0x36, 0x00},
+                {0x11, 0x80},
+                {0x0f, QMAX981_RANGE_8G},
+                {0x10, 0x2a},
+                {0x12, 0x8f},
+                {0x13, 0x10},
+                {0x14, 0x14},
+                {0x15, 0x10}, 
+                {0x16, 0x0c},
+              #if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
+                {0x19, 0x08},
+              #endif
+                {0x32, 0x02},
+                {0x27, QMA6981_OFFSET},
+                {0x28, QMA6981_OFFSET},
+                {0x29, QMA6981_OFFSET},
+              #else
+ 115            {0x11, 0x80},
+ 116            {0x36, 0xb6},
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 3   
+
+ 117            {0xff, 5},
+ 118            {0x36, 0x00},
+ 119            {0x11, 0x80},
+ 120            //{0x36, 0xb6},
+ 121            {0xff, 5},
+ 122            //{0x36, 0x00},
+ 123            //{0x11, 0x80},
+ 124            {0x0f, QMAX981_RANGE_4G},
+ 125            {0x10, QMA6981_ODR_125HZ},
+ 126          #endif
+ 127          #if defined(QMAX981_FIFO_FUNC)
+                {0x10, QMA6981_ODR_250HZ},
+                {0x11, 0x8b},
+                {0x3E, 0x40},
+                {0x17, 0x20},
+                #if defined(QMAX981_FIFO_USE_INT)
+                {0x1a, 0x20}, // fifo int map to int1
+                #endif
+              #endif
+ 136          #if defined(QMAX981_TAP_FUNC)
+ 137            {0x10, 0x05},
+ 138            {0x11, 0x80}, // 0x85 {0x2a, 0x80}, 
+ 139            {0x2b, 0x07}, //0x14  125*7
+ 140            {0x16, 0x20}, 
+ 141            {0x19, 0x20},
+ 142            //{0x1b, 0x20},
+ 143          #endif
+ 144          #if defined(QMAX981_INT_LATCH_MODE)
+                {0x21, 0x01},
+              #endif
+ 147          #if 1
+ 148            {0x20, 0x00},   // 下降沿触发
+ 149          #endif
+ 150            {0xff, 1}
+ 151          };
+ 152          
+ 153          /*  
+ 154          qma7981 odr setting
+ 155          0x10<2:0>   ODR(Hz)       Time(ms)  | RANGE 0x0f<3:0>
+ 156          000       43.3125       23.088    | 0001  2g      244ug/LSB
+ 157          001       86.4453       11.568    | 0010  4g      488ug/LSB
+ 158          002       172.1763      5.808   | 0100  8g      977ug/LSB
+ 159          003       341.5300      2.928   | 1000  16g   1.95mg/LSB
+ 160          004       672.0430      1.488   | 1111  32g   3.91mg/LSB
+ 161          005       32.5013       30.768    | Others  2g      244ug/LSB
+ 162          006       129.3995      7.728   |
+ 163          007       257.2016      3.888   |
+ 164          */
+ 165          
+ 166          const unsigned char xdata qma7981_init_tbl[][2] = 
+ 167          {
+ 168          #if defined(QMAX981_STEP_COUNTER)
+                {0x11, 0x80},
+                {0x36, 0xb6},
+                {0xff, 5},
+                {0x36, 0x00}, 
+                {0x0f, QMAX981_RANGE_4G}, // 0.488 mg
+                {0x10, 0x05},   // BW 32.5hz
+                //{0x4a, 0x08},   //Force I2C I2C interface.SPI is disabled,SENB can be used as ATB
+                {0x20, 0x05},
+                // seting 1
+                #if 0
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 4   
+
+                {0x10, 0x05},   // BW 32.5hz, 30.768 ms
+                {0x12, 0x8f},   // 
+                {0x13, 0x22},   // STEP_PRECISION<6:0>*LSB*16 , 0.488*16*40=310mg
+                {0x14, 0x0e},   // STEP_TIME_LOW<7:0>*(1/ODR)
+                {0x15, 0x09},   // STEP_TIME_UP<7:0>*8*(1/ODR)
+                {0x1f, 0x00},
+                #endif
+                // setting 2
+                #if 1 
+                {0x0f, QMAX981_RANGE_4G}, // 0.488 mg
+                {0x10, 0x06},   // ODR: 129.3995 Hz   delay:7.728 ms
+                {0x12, 0x95},
+                {0x13, 0x80},   // clear step
+                {0x13, 0x22},   //old 0x22 // STEP_PRECISION<6:0>*LSB*16 , 0.488*16*34=265mg
+                {0x14, 0x3a},   // STEP_TIME_LOW<7:0>*(1/ODR) 7.728*58=450ms(0x3a)
+                {0x15, 0x20},   // STEP_TIME_UP<7:0>*8*(1/ODR) 7.728*32*8=1978ms
+                {0x1f, 0x00},   // 390.4mg 11:<30*(16*LSB)   10:<150*(16*LSB)   01:<100*(16*LSB)   00:<50*(16*LSB) 
+                #endif  
+                // setting 3
+                #if 0
+                {0x0f, QMAX981_RANGE_8G}, // 0.977 mg
+                {0x10, 0x05},   // ODR: 32.5013   delay:30.768 ms
+                {0x12, 0x95},
+                {0x13, 0x80},   // clear step
+                {0x13, 0x11},   // STEP_PRECISION<6:0>*LSB*16 , 0.488*16*34=265mg
+                {0x14, 0x0b},   // STEP_TIME_LOW<7:0>*(1/ODR) 7.728*58=450ms(0x3a)
+                {0x15, 0x41},   // STEP_TIME_UP<7:0>*8*(1/ODR) 7.728*32*8=1978ms
+                {0x1f, 0x03},   //468.96 mg 11:<30*(16*LSB)   10:<150*(16*LSB)   01:<100*(16*LSB)   00:<50*(16*LSB) 
+                #endif
+                
+                {0x11, 0x80},
+                {0x5f, 0x80},   // enable test mode,take control the FSM
+                {0x5f, 0x00},   //normal mode
+              #else
+ 213            {0x11, 0x80},
+ 214            {0x36, 0xb6},
+ 215            {0xff, 5},
+ 216            {0x36, 0x00},
+ 217            {0x0f, QMAX981_RANGE_4G},
+ 218            {0x10, 0x05},   // BW 32.5hz  
+ 219            //{0x4a, 0x08},   //Force I2C I2C interface.SPI is disabled,SENB can be used as ATB
+ 220            {0x20, 0x05}, 
+ 221            {0x11, 0x80},
+ 222            {0x5f, 0x80},   // enable test mode,take control the FSM
+ 223            {0x5f, 0x00},   //normal mode
+ 224          #endif
+ 225          #if defined(QMAX981_FIFO_FUNC)
+                {0x5b, 0x08}, // set i2c clock
+                {0x10, 0x05},
+                {0x3E, 0x40},
+                {0x17, 0x20},
+                #if defined(QMAX981_FIFO_USE_INT)
+                {0x1a, 0x20}, // fifo int map to int1
+                #endif
+              #endif
+ 234          #if defined(QMA7981_IRQ_TEST)
+                {0x16, 0x48},
+                {0x19, 0x48},
+              #endif
+ 238          
+ 239            {0xff, 1}
+ 240          };
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 5   
+
+ 241          
+ 242          
+ 243          void qmaX981_delay(unsigned int delay)
+ 244          {
+ 245   1        int i,j;
+ 246   1        for(i=0;i<delay;i++)
+ 247   1        {
+ 248   2          for(j=0;j<1000;j++)
+ 249   2          {
+ 250   3            ;
+ 251   3          }
+ 252   2        }
+ 253   1      }
+ 254          
+ 255          u8 qmaX981_writereg(u8 reg_add,u8 reg_dat)
+ 256          {
+ 257   1        u8 ret=0;
+ 258   1      
+ 259   1        ret = qst_sw_writereg(reg_add,reg_dat);
+ 260   1        return 1;
+ 261   1      }
+ 262          
+ 263          u8 qmaX981_readreg(u8 reg_add,u8 *buf,u8 num)
+ 264          {
+ 265   1        u8 ret;
+ 266   1      
+ 267   1        ret = qst_sw_readreg(reg_add,buf,num);
+ 268   1        return ret;
+ 269   1      }
+ 270          
+ 271          
+ 272          u8 qmaX981_chip_id()
+ 273          {
+ 274   1        u8 chip_id = 0x00;
+ 275   1        qmaX981_writereg(QMAX981_REG_POWER_CTL, 0x80);
+ 276   1      
+ 277   1        qmaX981_readreg(QMAX981_CHIP_ID, &chip_id, 1);
+ 278   1        QMAX981_LOG("qmaX981_chip_id id=0x%x \n", (u16)chip_id);
+ 279   1      
+ 280   1        return chip_id;
+ 281   1      }
+ 282          
+ 283          
+ 284          static s32 qma6981_initialize(void)
+ 285          {
+ 286   1        int ret = 0;
+ 287   1        int index, total;
+ 288   1        unsigned char data_buf[2] = {0};
+ 289   1      
+ 290   1        total = sizeof(qma6981_init_tbl)/sizeof(qma6981_init_tbl[0]);
+ 291   1        for(index=0; index<total; index++)
+ 292   1        { 
+ 293   2          data_buf[0] = qma6981_init_tbl[index][0];
+ 294   2          data_buf[1] = qma6981_init_tbl[index][1];
+ 295   2          if(data_buf[0] == 0xff)
+ 296   2          {
+ 297   3            qmaX981_delay(data_buf[1]);
+ 298   3          }
+ 299   2          else
+ 300   2          {
+ 301   3            if(data_buf[0] == QMAX981_REG_RANGE)
+ 302   3            {
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 6   
+
+ 303   4              if(data_buf[1] == QMAX981_RANGE_4G)
+ 304   4                g_qmaX981.lsb_1g = 128;
+ 305   4              else if(data_buf[1] == QMAX981_RANGE_8G)
+ 306   4                g_qmaX981.lsb_1g = 64;
+ 307   4              else          
+ 308   4                g_qmaX981.lsb_1g = 256;
+ 309   4            }
+ 310   3      
+ 311   3            ret = qmaX981_writereg(data_buf[0],data_buf[1]);
+ 312   3            if(ret == 0)
+ 313   3            {
+ 314   4              QMAX981_ERR("qma6981_initialize ret=%d reg_addr=%x \n", ret, data_buf[0]);
+ 315   4              //return ret;
+ 316   4            }
+ 317   3            qmaX981_delay(2);
+ 318   3          }
+ 319   2        }
+ 320   1      
+ 321   1          return ret;
+ 322   1      }
+ 323          
+ 324          
+ 325          static s32 qma7981_initialize(void)
+ 326          {
+ 327   1        int ret = 0;
+ 328   1        int index, total;
+ 329   1        unsigned char data_buf[2] = {0};
+ 330   1        // for 7981, from peili, delete later
+ 331   1      #if 0
+                unsigned char r_58,r_59,r_5a,r_42,r_44,r_3d;
+              #endif
+ 334   1        // peili
+ 335   1      
+ 336   1        total = sizeof(qma7981_init_tbl)/sizeof(qma7981_init_tbl[0]);
+ 337   1        for(index=0; index<total; index++)
+ 338   1        { 
+ 339   2          data_buf[0] = qma7981_init_tbl[index][0];
+ 340   2          data_buf[1] = qma7981_init_tbl[index][1];
+ 341   2          if(data_buf[0] == 0xff)
+ 342   2          {
+ 343   3            qmaX981_delay(data_buf[1]);
+ 344   3          }
+ 345   2          else
+ 346   2          {
+ 347   3            if(data_buf[0] == QMAX981_REG_RANGE)
+ 348   3            {
+ 349   4              if(data_buf[1] == QMAX981_RANGE_4G)
+ 350   4                g_qmaX981.lsb_1g = 2048;
+ 351   4              else if(data_buf[1] == QMAX981_RANGE_8G)
+ 352   4                g_qmaX981.lsb_1g = 1024;
+ 353   4              else if(data_buf[1] == QMAX981_RANGE_16G)
+ 354   4                g_qmaX981.lsb_1g = 512;
+ 355   4              else if(data_buf[1] == QMAX981_RANGE_32G)
+ 356   4                g_qmaX981.lsb_1g = 256;
+ 357   4              else
+ 358   4                g_qmaX981.lsb_1g = 4096;
+ 359   4            }
+ 360   3            ret = qmaX981_writereg(data_buf[0],data_buf[1]);
+ 361   3            if(ret == 0)
+ 362   3            {
+ 363   4              QMAX981_ERR("qma7981_initialize ret=%d\n", ret);
+ 364   4              return ret;
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 7   
+
+ 365   4            }
+ 366   3            qmaX981_delay(2);
+ 367   3          }
+ 368   2        }
+ 369   1      #if 0
+                // for 7981, from peili, delete later
+                r_58 = 0x58;  
+                ret=qmaX981_readreg(0x58, &r_58, 1);
+                qmaX981_delay(2);
+              
+                r_59 = 0x59;  
+                ret=qmaX981_readreg(0x59, &r_59, 1);
+                qmaX981_delay(2);
+              
+                r_5a = 0x5a;  
+                ret=qmaX981_readreg(0x5a, &r_5a, 1);
+                qmaX981_delay(2);
+              
+                r_42 = 0x42;  
+                ret=qmaX981_readreg(0x42, &r_42, 1);
+                qmaX981_delay(2);
+              
+                r_44 = 0x44;  
+                ret=qmaX981_readreg(0x44, &r_44, 1);
+                qmaX981_delay(2);
+              
+                r_3d = 0x3d;  
+                ret=qmaX981_readreg(0x3d, &r_3d, 1);
+                qmaX981_delay(2);
+                
+                //write 0x58<3> to 0x3D<7>
+                data_buf[0] = 0x3d;
+                data_buf[1] = (r_3d|0x7f)|((r_58&0x08)<<4);
+                ret = qmaX981_writereg(data_buf[0],data_buf[1]);
+                qmaX981_delay(2);
+                //write 0x5a<7:5>,0x59<7:5> to 0x42<5:0>
+                data_buf[0] = 0x42;
+                data_buf[1] = (r_42&0xc0)|((r_59&0xe0)>>5)|((r_5a&0xe0)>>2);
+                ret = qmaX981_writereg(data_buf[0],data_buf[1]);
+                qmaX981_delay(2);
+                //write 0x59<3:0> to 0x44<3:0>
+                data_buf[0] = 0x44;
+                data_buf[1] = (r_44&0xf0)|(r_59&0x0f);
+                ret = qmaX981_writereg(data_buf[0],data_buf[1]);
+                qmaX981_delay(2);
+              
+                // peili
+              #endif
+ 413   1          return ret;
+ 414   1      }
+ 415          
+ 416          
+ 417          #if defined(QMAX981_FIFO_FUNC)
+              static int qmaX981_fifo_data[32][3];
+              
+              static int qma6981_read_fifo_raw(int *data_raw)
+              {
+                //int res;  
+                unsigned char databuf[6] = {0};   
+                unsigned char i;
+                int ret;
+                
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 8   
+
+                ret = qmaX981_readreg(0x3f, databuf, 6);
+                qmaX981_delay(2);
+                if(ret != 1)
+                {
+                  QMAX981_LOG("qma6981_read_fifo_raw error \n");
+                  return ret;
+                }
+              
+                data_raw[0]  = (short)((databuf[1]<<2) |( databuf[0]>>6));
+                data_raw[1]  = (short)((databuf[3]<<2) |( databuf[2]>>6));
+                data_raw[2]  = (short)((databuf[5]<<2) |( databuf[4]>>6));
+              
+                for(i=0;i<3;i++)        
+                { //because the data is store in binary complement number formation in computer system
+                  if ( data_raw[i] == 0x0200 )  //so we want to calculate actual number here
+                    data_raw[i]= -512;    //10bit resolution, 512= 2^(10-1)
+                  else if ( data_raw[i] & 0x0200 )  //transfor format
+                  {         //printk("data 0 step %x \n",data[i]);
+                    data_raw[i] -= 0x1;     //printk("data 1 step %x \n",data[i]);
+                    data_raw[i] = ~data_raw[i];   //printk("data 2 step %x \n",data[i]);
+                    data_raw[i] &= 0x01ff;    //printk("data 3 step %x \n\n",data[i]);
+                    data_raw[i] = -data_raw[i];   
+                  }
+              #if defined(QMAX981_STEP_COUNTER)
+                  data_raw[i] -= QMA6981_OFFSET;
+              #endif
+                }
+                //printk("qma6981 fifo raw: %d  %d  %d\n", data[0], data[1], data[2]);  
+              
+                return 1; 
+              }
+              
+              static int qma7981_read_fifo_raw(int *data_raw)
+              {
+                int res;  
+                unsigned char databuf[6] = {0};
+                int ret;
+                
+                ret = qmaX981_readreg(0x3f, databuf, 6);
+                qmaX981_delay(2);
+                if(ret != 1)
+                {
+                  QMAX981_LOG("qma7981_read_fifo_raw error \n");
+                  return ret;
+                }
+              
+                data_raw[0] = (short)((databuf[1]<<8)|(databuf[0]));
+                data_raw[1] = (short)((databuf[3]<<8)|(databuf[2]));
+                data_raw[2] = (short)((databuf[5]<<8)|(databuf[4]));
+                data_raw[0] = data_raw[0]>>2;
+                data_raw[1] = data_raw[1]>>2;
+                data_raw[2] = data_raw[2]>>2;
+              
+                //printk("qma7981 fifo raw: %d  %d  %d\n", data[0], data[1], data[2]);  
+                return 1;
+              }
+              
+              static int qmaX981_read_fifo_acc(int *acc_data)
+              {
+                int ret = 0;
+                int raw_data[3];
+              
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 9   
+
+                if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
+                {
+                  ret = qma6981_read_fifo_raw(raw_data);
+                }
+                else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
+                {
+                  ret = qma7981_read_fifo_raw(raw_data);
+                }
+                else
+                {
+                  ret = 0;
+                }
+                
+                if(1 != ret ){
+                  QMAX981_ERR("qmaX981_read_fifo_acc error\n");
+                  return ret;
+                }
+                
+                //remap coordinate
+                acc_data[g_qmaX981.cvt.map[0]] = g_qmaX981.cvt.sign[0]*raw_data[0];
+                acc_data[g_qmaX981.cvt.map[1]] = g_qmaX981.cvt.sign[1]*raw_data[1];
+                acc_data[g_qmaX981.cvt.map[2]] = g_qmaX981.cvt.sign[2]*raw_data[2];
+                //QMAX981_LOG("qmaX981 AFTER x1:%d,y:%d,z:%d\n",data[0],data[1],data[2]);
+              
+                acc_data[0] = (acc_data[0]*9807)/(g_qmaX981.lsb_1g);
+                acc_data[1] = (acc_data[1]*9807)/(g_qmaX981.lsb_1g);
+                acc_data[2] = (acc_data[2]*9807)/(g_qmaX981.lsb_1g);
+              
+                return ret;
+              }
+              
+              static int qmaX981_read_fifo(unsigned char is_raw)
+              {
+                int ret = 0;
+                unsigned char databuf[2];
+                int acc_data[3];
+                int icount;
+                int fifo_depth = 32;
+              
+                if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
+                  fifo_depth = 16;
+                else
+                  fifo_depth = 32;
+              
+                ret = qmaX981_readreg(QMAX981_FIFO_STATE, databuf, 1);
+                qmaX981_delay(2);
+              
+                QMAX981_LOG("fifo level = %d   %d \r\n", fifo_depth, databuf[0]&0x7f);
+              
+                if((databuf[0]&0x7f)==fifo_depth)
+                {
+                  for(icount=0; icount<fifo_depth; icount++)
+                  {
+                    if(is_raw == 1)
+                    {
+                      if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
+                      {
+                        ret = qma6981_read_fifo_raw(acc_data);
+                      }
+                      else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
+                      {
+                        ret = qma7981_read_fifo_raw(acc_data);
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 10  
+
+                      }
+                      else
+                      {
+                        ret = 0;
+                      }
+                    }
+                    else
+                    {
+                      ret = qmaX981_read_fifo_acc(acc_data);
+                    }
+                    
+                    if(ret != 1)
+                    {
+                      QMAX981_ERR("read 0x3f error!\n");
+                      return ret;
+                    }
+                    qmaX981_fifo_data[icount][0] = acc_data[0];
+                    qmaX981_fifo_data[icount][1] = acc_data[1];
+                    qmaX981_fifo_data[icount][2] = acc_data[2];
+                    QMAX981_LOG("fifo_data %d: %f %f  %f \r\n", icount, acc_data[0]/1000.00, acc_data[1]/1000.00, acc_data[2
+             -]/1000.00);
+                  }
+                  // read status reg
+                }
+                else
+                {
+                  ret = 0;
+                }
+                ret = qmaX981_readreg(QMAX981_INT_STAT1, databuf, 1);
+                qmaX981_delay(2);
+                // write 0x3e
+                ret = qmaX981_writereg(0x3e, 0x40);
+                qmaX981_delay(2);
+              
+                return ret;
+              }
+              #endif
+ 587          
+ 588          
+ 589          #if 0//defined(QMAX981_USE_IRQ1)
+              static void qmaX981_setup_irq1(void)
+              {
+              
+              }
+              
+              void EXTI15_10_IRQHandler(void)         //这里为：EXTI15_10 (外部中断号的10~15都在这里实现）  
+              {
+              
+              }
+              
+              #endif
+ 601          
+ 602          
+ 603          #if 0//defined(QMAX981_USE_IRQ2)
+              static void qmaX981_setup_irq2(void)
+              {
+              }
+              
+              
+              void EXTI9_5_IRQHandler(void)
+              {
+              
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 11  
+
+              }
+              #endif
+ 614          
+ 615          
+ 616          s32 qmaX981_init(void)
+ 617          {
+ 618   1        int ret = 0;
+ 619   1      
+ 620   1        i2c_CheckDevice(QMAX981_I2C_ADDR_W);
+ 621   1      #if defined(QMAX981_USE_SPI)
+                Spi_Init();
+              #endif
+ 624   1        qmaX981_delay(100);
+ 625   1      
+ 626   1        memset(&g_qmaX981, 0, sizeof(g_qmaX981));
+ 627   1        g_qmaX981.chip_id = qmaX981_chip_id();
+ 628   1        if((g_qmaX981.chip_id>=0xa9) && (g_qmaX981.chip_id<=0xb6))
+ 629   1        {   
+ 630   2          QMAX981_LOG("qma6981 find \n");
+ 631   2          g_qmaX981.chip_type = CHIP_TYPE_QMA6981;  
+ 632   2        }
+ 633   1        else if((g_qmaX981.chip_id>=0xe0) && (g_qmaX981.chip_id<=0xe6)) 
+ 634   1        {
+ 635   2          QMAX981_LOG("qma7981 find \n");   
+ 636   2          g_qmaX981.chip_type = CHIP_TYPE_QMA7981;  
+ 637   2        } 
+ 638   1        else  
+ 639   1        {   
+ 640   2          QMAX981_LOG("qma acc chip id not defined!!! \n");   
+ 641   2          g_qmaX981.chip_type = CHIP_TYPE_UNDEFINE; 
+ 642   2        }
+ 643   1        // add by yangzhiqiang use another i2c addr
+ 644   1        if(g_qmaX981.chip_type == CHIP_TYPE_UNDEFINE)
+ 645   1        {
+ 646   2          QMAX981_LOG("qmaX981 change I2C add = 0x%x! \n", QMAX981_ACC_I2C_ADDRESS2);   
+ 647   2          qmaX981_delay(1000);
+ 648   2          QMAX981_I2C_ADDR_W = QMAX981_ACC_I2C_ADDRESS2;
+ 649   2          QMAX981_I2C_ADDR_R = QMAX981_ACC_I2C_ADDRESS2|0x01;
+ 650   2          i2c_CheckDevice(QMAX981_I2C_ADDR_W);
+ 651   2          qmaX981_delay(1000);
+ 652   2          g_qmaX981.chip_id = qmaX981_chip_id();
+ 653   2          if((g_qmaX981.chip_id>=0xa9) && (g_qmaX981.chip_id<=0xb6))
+ 654   2          {   
+ 655   3            QMAX981_LOG("qma6981 find \n");
+ 656   3            g_qmaX981.chip_type = CHIP_TYPE_QMA6981;  
+ 657   3          }
+ 658   2          else if((g_qmaX981.chip_id>=0xe0) && (g_qmaX981.chip_id<=0xe6)) 
+ 659   2          {
+ 660   3            QMAX981_LOG("qma7981 find \n");   
+ 661   3            g_qmaX981.chip_type = CHIP_TYPE_QMA7981;  
+ 662   3          } 
+ 663   2          else  
+ 664   2          {   
+ 665   3            QMAX981_LOG("qma acc chip id not defined!!! \n");   
+ 666   3            g_qmaX981.chip_type = CHIP_TYPE_UNDEFINE; 
+ 667   3          }
+ 668   2        }
+ 669   1        // add by yangzhiqiang
+ 670   1        if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)    
+ 671   1          ret = qma6981_initialize(); 
+ 672   1        else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)   
+ 673   1          ret = qma7981_initialize();
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 12  
+
+ 674   1        else
+ 675   1          ret = 0;
+ 676   1      
+ 677   1        g_qmaX981.layout = 3;
+ 678   1        memcpy(&g_qmaX981.cvt, &qst_map[g_qmaX981.layout], sizeof(qst_convert));
+ 679   1      
+ 680   1      #if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
+                qmaX981_step_debounce_reset();
+              #endif
+ 683   1      
+ 684   1      #if 0//defined(QMAX981_USE_IRQ1)
+                qmaX981_setup_irq1();
+              #endif
+ 687   1        return ret;
+ 688   1      }
+ 689          
+ 690          
+ 691          static int qma6981_read_raw_xyz(int *data_buf)
+ 692          {
+ 693   1        //int res;  
+ 694   1        unsigned char databuf[6] = {0};   
+ 695   1        unsigned char i;
+ 696   1        int ret;
+ 697   1      
+ 698   1        ret = qmaX981_readreg(QMAX981_XOUTL, databuf, 6);
+ 699   1        if(ret == 0){
+ 700   2          QMAX981_ERR("read xyz error!!!");
+ 701   2          return 0; 
+ 702   2        }
+ 703   1        data_buf[0]  = (short)((databuf[1]<<2) |( databuf[0]>>6));
+ 704   1        data_buf[1]  = (short)((databuf[3]<<2) |( databuf[2]>>6));
+ 705   1        data_buf[2]  = (short)((databuf[5]<<2) |( databuf[4]>>6));
+ 706   1      
+ 707   1        for(i=0;i<3;i++)        
+ 708   1        { //because the data is store in binary complement number formation in computer system
+ 709   2          if ( data_buf[i] == 0x0200 )  //so we want to calculate actual number here
+ 710   2            data_buf[i]= -512;    //10bit resolution, 512= 2^(10-1)
+ 711   2          else if ( data_buf[i] & 0x0200 )  //transfor format
+ 712   2          {         //printk("data 0 step %x \n",data[i]);
+ 713   3            data_buf[i] -= 0x1;     //printk("data 1 step %x \n",data[i]);
+ 714   3            data_buf[i] = ~data_buf[i];   //printk("data 2 step %x \n",data[i]);
+ 715   3            data_buf[i] &= 0x01ff;    //printk("data 3 step %x \n\n",data[i]);
+ 716   3            data_buf[i] = -data_buf[i];   
+ 717   3          }
+ 718   2      #if defined(QMAX981_STEP_COUNTER)
+                  data_buf[i] -= QMA6981_OFFSET;
+              #endif
+ 721   2        }
+ 722   1      
+ 723   1        //printk("yzqaccraw %d  %d  %d\n", data[0], data[1], data[2]);
+ 724   1        return 1;
+ 725   1      }
+ 726          
+ 727          static int qma7981_read_raw_xyz(int *data_buf)
+ 728          {
+ 729   1        unsigned char databuf[6] = {0};   
+ 730   1        int ret;
+ 731   1        //qma7981_acc_format data_14bit;
+ 732   1      
+ 733   1        ret = qmaX981_readreg(QMAX981_XOUTL, databuf, 6);
+ 734   1        if(ret == 0){
+ 735   2          QMAX981_ERR("read xyz error!!!");
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 13  
+
+ 736   2          return 0; 
+ 737   2        }
+ 738   1      
+ 739   1        data_buf[0] = (short)((databuf[1]<<8)|(databuf[0]));
+ 740   1        data_buf[1] = (short)((databuf[3]<<8)|(databuf[2]));
+ 741   1        data_buf[2] = (short)((databuf[5]<<8)|(databuf[4]));
+ 742   1        data_buf[0] = data_buf[0]>>2;
+ 743   1        data_buf[1] = data_buf[1]>>2;
+ 744   1        data_buf[2] = data_buf[2]>>2;
+ 745   1      
+ 746   1        return 1;
+ 747   1      }
+ 748          
+ 749          s32 qmaX981_read_raw(s32 *rawData)
+ 750          {
+ 751   1        int ret;
+ 752   1      
+ 753   1        if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)    
+ 754   1          ret = qma6981_read_raw_xyz(rawData);  
+ 755   1        else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)   
+ 756   1          ret = qma7981_read_raw_xyz(rawData);
+ 757   1        else
+ 758   1          ret = 0;
+ 759   1      
+ 760   1        return ret;
+ 761   1      }
+ 762          
+ 763          
+ 764          s32 qmaX981_read_acc(s32 *accData)
+ 765          {
+ 766   1        int ret;
+ 767   1        s32 rawData[3];
+ 768   1      
+ 769   1        qmaX981_read_raw(rawData);
+ 770   1        accData[g_qmaX981.cvt.map[0]] = g_qmaX981.cvt.sign[0]*rawData[0];
+ 771   1        accData[g_qmaX981.cvt.map[1]] = g_qmaX981.cvt.sign[1]*rawData[1];
+ 772   1        accData[g_qmaX981.cvt.map[2]] = g_qmaX981.cvt.sign[2]*rawData[2];
+ 773   1      
+ 774   1        accData[0] = (accData[0]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
+ 775   1        accData[1] = (accData[1]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
+ 776   1        accData[2] = (accData[2]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
+ 777   1      
+ 778   1        return ret;
+ 779   1      
+ 780   1      }
+ 781          
+ 782          #if defined(QMAX981_STEP_COUNTER)
+              int qmaX981_read_stepcounter(void)
+              {
+                int ret;
+                u8 data[2];
+                int step_num;
+              
+                ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
+                step_num = (data[1]<<8)|data[0];
+              #if defined(QMAX981_CHECK_ABNORMAL_DATA)
+                ret=qmaX981_check_abnormal_data(step_num, &step_num);
+                if(ret != 0)
+                {
+                  return -1;
+                }
+              #endif
+C51 COMPILER V9.56.0.0   QMAX981                                                           07/03/2018 13:57:58 PAGE 14  
+
+              #if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
+                step_num = qmaX981_step_debounce_read_data(step_num);
+              #endif
+              
+                return step_num;
+              }
+              #endif
+ 805          
+ 806          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1589    ----
+   CONSTANT SIZE    =    223    ----
+   XDATA SIZE       =    148    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     20      59
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
