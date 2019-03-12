@@ -1,0 +1,9 @@
+
+config MTK_QMP6988
+	bool "QMP6988 for MediaTek package"
+	default n
+	help
+	  It support different type sensor
+	  in this platform. If this option
+	  is set, it will support pressure
+	  QMP6988.
