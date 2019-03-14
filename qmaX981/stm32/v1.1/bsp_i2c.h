@@ -6,6 +6,7 @@
 
 
 /**************************I2C参数定义，I2C1或I2C2********************************/
+#if 1
 #define             SENSORS_I2Cx                                I2C1
 #define             SENSORS_I2C_APBxClock_FUN                   RCC_APB1PeriphClockCmd
 #define             SENSORS_I2C_CLK                             RCC_APB1Periph_I2C1
@@ -15,6 +16,17 @@
 #define             SENSORS_I2C_SCL_PIN                         GPIO_Pin_6
 #define             SENSORS_I2C_SDA_PORT                        GPIOB 
 #define             SENSORS_I2C_SDA_PIN                         GPIO_Pin_7
+#else
+#define             SENSORS_I2Cx                                I2C2
+#define             SENSORS_I2C_APBxClock_FUN                   RCC_APB1PeriphClockCmd
+#define             SENSORS_I2C_CLK                             RCC_APB1Periph_I2C2
+#define             SENSORS_I2C_GPIO_APBxClock_FUN              RCC_APB2PeriphClockCmd
+#define             SENSORS_I2C_GPIO_CLK                        RCC_APB2Periph_GPIOB     
+#define             SENSORS_I2C_SCL_PORT                        GPIOB   
+#define             SENSORS_I2C_SCL_PIN                         GPIO_Pin_10
+#define             SENSORS_I2C_SDA_PORT                        GPIOB 
+#define             SENSORS_I2C_SDA_PIN                         GPIO_Pin_11
+#endif
 
 /*等待超时时间*/
 #define I2CT_FLAG_TIMEOUT         ((uint32_t)0x1000)

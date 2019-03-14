@@ -45,7 +45,7 @@
 #else	/* 这个分支选择直接寄存器操作实现IO读写 */
 	//#define I2C_SCL_INPUT() 
 	//#define I2C_SCL_OUTPUT()
-	//#define I2C_SDA_INPUT()		{GPIOB->CRH&=0XFFFFFF0F;GPIOB->CRH|=8<<4;}	
+	//#define I2C_SDA_INPUT()		{GPIOB->CRH&=0XFFFFFF0F;GPIOB->CRH|=8<<4;}				// GPIO9
 	//#define I2C_SDA_OUTPUT() 		{GPIOB->CRH&=0XFFFFFF0F;GPIOB->CRH|=3<<4;}
 
 	#define I2C_SCL_INPUT()		//	{GPIOB->CRL&=0X0FFFFFFF;GPIOB->CRL|=((uint32_t)8<<24);}		//GPIO6
@@ -412,5 +412,31 @@ uint8_t jhm1200_iic_read(uint8_t *pData, uint16_t Length)
 
 }
 #endif
+
+void Oled_Write_IIC_Command(unsigned char IIC_Command)
+{
+	i2c_Start();
+	i2c_SendByte(0x78);            //Slave address,SA0=0
+	i2c_WaitAck();	
+	i2c_SendByte(0x00);			//write command
+	i2c_WaitAck();	
+	i2c_SendByte(IIC_Command); 
+	i2c_WaitAck();	
+	i2c_Stop();
+}
+/**********************************************
+// IIC Write Data
+**********************************************/
+void Oled_Write_IIC_Data(unsigned char IIC_Data)
+{
+	i2c_Start();
+	i2c_SendByte(0x78);			//D/C#=0; R/W#=0
+	i2c_WaitAck();	
+	i2c_SendByte(0x40);			//write data
+	i2c_WaitAck();	
+	i2c_SendByte(IIC_Data);
+	i2c_WaitAck();	
+	i2c_Stop();
+}
 
 

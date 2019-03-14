@@ -45,9 +45,9 @@
 #define SPIT_FLAG_TIMEOUT         ((uint32_t)0x1000)
 #define SPIT_LONG_TIMEOUT         ((uint32_t)(10 * SPIT_FLAG_TIMEOUT))
 
-extern u8 qmaX981_spi_read(u8 addr, u8* buff, u8 len);
-extern u8 qmaX981_spi_write(u8 addr,u8 data);
-
+u8 qmaX981_spi_read(u8 addr, u8* buff, u8 len);
+u8 qmaX981_spi_write(u8 addr,u8 data);
+void Spi_Init(void);
 
 #endif /* __SPI_QST_H */
 

@@ -1,10 +1,10 @@
 /**
   ******************************************************************************
-  * @file    qma7981.c
+  * @file    qmaX981.c
   * @author  Yangzhiqiang@qst
   * @version V1.0
   * @date    2017-12-15
-  * @brief    qma6981驱动
+  * @brief    qmaX981驱动
   ******************************************************************************
   * @attention
   *
@@ -16,6 +16,9 @@
   */ 
 
 #include "qmaX981.h"
+#if defined(OLED_SUPPORT)
+#include "oled.h"
+#endif
 
 #define QMAX981_LOG		console_write
 #define QMAX981_ERR		console_write
@@ -35,6 +38,7 @@ typedef enum
 {	
 	CHIP_TYPE_QMA6981 = 0,
 	CHIP_TYPE_QMA7981,
+	CHIP_TYPE_QMA6100,
 	CHIP_TYPE_UNDEFINE,
 	CHIP_TYPE_MAX
 }qmaX981_type;
@@ -70,7 +74,17 @@ static const qst_convert qst_map[] =
 
 
 static qmaX981_data g_qmaX981;
+#if !defined(USE_SPI)
 static u8 QMAX981_I2C_ADDR_W	= QMAX981_I2C_SLAVE_ADDR;
+#endif
+#if defined(QMA7981_DOUBLE_TRIPLE_CLICK)
+static unsigned int acc_data_curr[3];
+static unsigned int acc_data[3];
+static qst_click_check g_click;
+#endif
+#if defined(QMA7981_ABNORMAL_SHAKE_CHECK)
+static qst_shake_check g_shake;
+#endif
 
 const u8 qma6981_init_tbl[][2] = 
 {
@@ -151,7 +165,7 @@ const u8 qma7981_init_tbl[][2] =
 	{0xff, 5},
 	{0x36, 0x00},
 	{0x0f, QMAX981_RANGE_4G},
-	{0x10, 0xe1},		// BW 32.5hz	
+	{0x10, 0xe1},		// ODR 130hz	
 	//{0x4a, 0x08},		//Force I2C I2C s32erface.SPI is disabled,SENB can be used as ATB
 	//{0x20, 0x05},	
 	{0x11, 0x80},
@@ -176,13 +190,13 @@ void qmaX981_delay(u32 delay)
 
 u8 qmaX981_writereg(u8 reg_add,u8 reg_dat)
 {
-#if defined(QMAX981_USE_SPI)
+#if defined(USE_SPI)
 	return qmaX981_spi_write(reg_add, reg_dat);
 #else
 	#if defined(QMAX981_USE_SW_IIC)
 	return qst_sw_writereg(QMAX981_I2C_ADDR_W<<1, reg_add, reg_dat);
 	#else
-	I2C_Bus_set_slave_addr(QMAX981_I2C_ADDR_W);
+	I2C_Bus_set_slave_addr(QMAX981_I2C_ADDR_W<<1);
 	return I2C_ByteWrite(reg_dat,reg_add);
 	#endif
 #endif
@@ -190,13 +204,13 @@ u8 qmaX981_writereg(u8 reg_add,u8 reg_dat)
 
 u8 qmaX981_readreg(u8 reg_add,u8 *buf,u8 num)
 {
-#if defined(QMAX981_USE_SPI)
+#if defined(USE_SPI)
 	return qmaX981_spi_read(reg_add, buf, num);
 #else
 	#if defined(QMAX981_USE_SW_IIC)
 	return qst_sw_readreg(QMAX981_I2C_ADDR_W<<1, reg_add, buf, num);
 	#else
-	I2C_Bus_set_slave_addr(QMAX981_I2C_ADDR_W);
+	I2C_Bus_set_slave_addr(QMAX981_I2C_ADDR_W<<1);
 	return I2C_BufferRead(buf,reg_add,(u16)num);
 	#endif
 #endif
@@ -214,6 +228,341 @@ u8 qmaX981_chip_id()
 	return chip_id;
 }
 
+
+void qmaX981_set_range(u8 range)
+{
+	u8 ret;
+
+	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
+	{	
+		if(range == QMAX981_RANGE_4G)
+			g_qmaX981.lsb_1g = 128;
+		else if(range == QMAX981_RANGE_8G)
+			g_qmaX981.lsb_1g = 64;
+		else					
+			g_qmaX981.lsb_1g = 256;
+	}
+	else if((g_qmaX981.chip_type == CHIP_TYPE_QMA7981)||(g_qmaX981.chip_type == CHIP_TYPE_QMA6100))
+	{
+		if(range == QMAX981_RANGE_4G)
+			g_qmaX981.lsb_1g = 2048;
+		else if(range == QMAX981_RANGE_8G)
+			g_qmaX981.lsb_1g = 1024;
+		else if(range == QMAX981_RANGE_16G)
+			g_qmaX981.lsb_1g = 512;
+		else if(range == QMAX981_RANGE_32G)
+			g_qmaX981.lsb_1g = 256;
+		else
+			g_qmaX981.lsb_1g = 4096;
+	}
+
+	ret = qmaX981_writereg(QMAX981_REG_RANGE, range);	
+	if(ret == 0){
+		QMAX981_ERR("qmaX981_set_range error!!!\n");
+	}
+}
+
+static s32 qma6981_read_raw_xyz(s32 *data)
+{
+	//s32 res;	
+	u8 databuf[6] = {0};		
+	u8 i;
+	s32 ret;
+
+	ret = qmaX981_readreg(QMAX981_XOUTL, databuf, 6);
+	if(ret == 0){
+		QMAX981_ERR("read xyz error!!!\n");
+		return 0;	
+	}
+ 	data[0]  = (short)((databuf[1]<<2) |( databuf[0]>>6));
+	data[1]  = (short)((databuf[3]<<2) |( databuf[2]>>6));
+	data[2]  = (short)((databuf[5]<<2) |( databuf[4]>>6));
+
+	for(i=0;i<3;i++)				
+	{	//because the data is store in binary complement number formation in computer system
+		if ( data[i] == 0x0200 )	//so we want to calculate actual number here
+			data[i]= -512;		//10bit resolution, 512= 2^(10-1)
+		else if ( data[i] & 0x0200 )	//transfor format
+		{					//prs32k("data 0 step %x \n",data[i]);
+			data[i] -= 0x1;			//prs32k("data 1 step %x \n",data[i]);
+			data[i] = ~data[i];		//prs32k("data 2 step %x \n",data[i]);
+			data[i] &= 0x01ff;		//prs32k("data 3 step %x \n\n",data[i]);
+			data[i] = -data[i];		
+		}
+#if defined(QMAX981_STEP_COUNTER)
+		data[i] -= QMA6981_OFFSET;
+#endif
+	}
+
+	//prs32k("yzqaccraw	%d	%d	%d\n", data[0], data[1], data[2]);
+	return 1;
+}
+
+static s32 qma7981_read_raw_xyz(s32 *data)
+{
+	u8 databuf[6] = {0}; 	
+	s32 ret;
+	//qma7981_acc_format data_14bit;
+
+	ret = qmaX981_readreg(QMAX981_XOUTL, databuf, 6);
+	if(ret == 0){
+		QMAX981_ERR("7981 read xyz error!!!\n");
+		return 0;	
+	}
+
+	data[0] = (short)((databuf[1]<<8)|(databuf[0]));
+	data[1] = (short)((databuf[3]<<8)|(databuf[2]));
+	data[2] = (short)((databuf[5]<<8)|(databuf[4]));
+	data[0] = data[0]>>2;
+	data[1] = data[1]>>2;
+	data[2] = data[2]>>2;
+
+	return 1;
+}
+
+s32 qmaX981_read_raw(s32 *rawData)
+{
+	s32 ret;
+
+	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)		
+		ret = qma6981_read_raw_xyz(rawData);	
+	else if((g_qmaX981.chip_type == CHIP_TYPE_QMA7981)||(g_qmaX981.chip_type == CHIP_TYPE_QMA6100))	
+		ret = qma7981_read_raw_xyz(rawData);
+	else
+		ret = 0;
+
+	return ret;
+}
+
+
+s32 qmaX981_read_acc(s32 *accData)
+{
+	s32 ret;
+	s32 rawData[3];
+
+	ret = qmaX981_read_raw(rawData);
+	accData[g_qmaX981.cvt.map[0]] = g_qmaX981.cvt.sign[0]*rawData[0];
+	accData[g_qmaX981.cvt.map[1]] = g_qmaX981.cvt.sign[1]*rawData[1];
+	accData[g_qmaX981.cvt.map[2]] = g_qmaX981.cvt.sign[2]*rawData[2];
+
+	accData[0] = (accData[0]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
+	accData[1] = (accData[1]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
+	accData[2] = (accData[2]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
+
+	//if(ret)
+	//{
+		//console_write("acc %f %f %f\n",accData[0]/1000.0f, accData[1]/1000.0f, accData[2]/1000.0f);
+	//}
+
+	return ret;
+
+}
+
+#if defined(QMAX981_STEPCOUNTER)
+u32 qmaX981_read_stepcounter(void)
+{
+	u8 data[3];
+	s32 ret;
+	u32 step_num;
+
+	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
+	{
+		ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
+		step_num = (data[1]<<8)|data[0];
+	}
+	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
+	{	
+		ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
+		ret = qmaX981_readreg(QMA7981_STEP_CNT_M, &data[2], 1);
+		step_num = (u32)(((u32)data[2]<<16)|((u32)data[1]<<8)|data[0]);
+	}
+#if defined(QMAX981_CHECK_ABNORMAL_DATA)
+	ret=qmaX981_check_abnormal_data(step_num, &step_num);
+	if(ret != 0)
+	{
+		return -1;
+	}
+#endif
+#if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
+	step_num = qmaX981_step_debounce_read_data(step_num);
+#endif
+
+	return step_num;
+}
+#endif
+
+#if defined(QMAX981_FIFO_FUNC)
+static s32 qmaX981_fifo_data[32][3];
+
+static s32 qma6981_read_fifo_raw(s32 *data)
+{
+	//s32 res;	
+	u8 databuf[6] = {0};		
+	u8 i;
+	s32 ret;
+	
+	ret = qmaX981_readreg(0x3f, databuf, 6);
+	qmaX981_delay(2);
+	if(ret != 1)
+	{
+		QMAX981_LOG("qma6981_read_fifo_raw error \n");
+		return ret;
+	}
+
+ 	data[0]  = (short)((databuf[1]<<2) |( databuf[0]>>6));
+	data[1]  = (short)((databuf[3]<<2) |( databuf[2]>>6));
+	data[2]  = (short)((databuf[5]<<2) |( databuf[4]>>6));
+
+	for(i=0;i<3;i++)				
+	{	//because the data is store in binary complement number formation in computer system
+		if ( data[i] == 0x0200 )	//so we want to calculate actual number here
+			data[i]= -512;		//10bit resolution, 512= 2^(10-1)
+		else if ( data[i] & 0x0200 )	//transfor format
+		{					//prs32k("data 0 step %x \n",data[i]);
+			data[i] -= 0x1;			//prs32k("data 1 step %x \n",data[i]);
+			data[i] = ~data[i];		//prs32k("data 2 step %x \n",data[i]);
+			data[i] &= 0x01ff;		//prs32k("data 3 step %x \n\n",data[i]);
+			data[i] = -data[i];		
+		}
+#if defined(QMAX981_STEP_COUNTER)
+		data[i] -= QMA6981_OFFSET;
+#endif
+	}
+	//prs32k("qma6981 fifo raw: %d	%d	%d\n", data[0], data[1], data[2]);	
+
+	return 1;	
+}
+
+static s32 qma7981_read_fifo_raw(s32 *data)
+{
+	s32 res;	
+	u8 databuf[6] = {0};
+	s32 ret;
+	
+	ret = qmaX981_readreg(0x3f, databuf, 6);
+	qmaX981_delay(2);
+	if(ret != 1)
+	{
+		QMAX981_LOG("qma7981_read_fifo_raw error \n");
+		return ret;
+	}
+
+	data[0] = (short)((databuf[1]<<8)|(databuf[0]));
+	data[1] = (short)((databuf[3]<<8)|(databuf[2]));
+	data[2] = (short)((databuf[5]<<8)|(databuf[4]));
+	data[0] = data[0]>>2;
+	data[1] = data[1]>>2;
+	data[2] = data[2]>>2;
+
+	//prs32k("qma7981 fifo raw: %d	%d	%d\n", data[0], data[1], data[2]);	
+	return 1;
+}
+
+static s32 qmaX981_read_fifo_acc(s32 *acc_data)
+{
+	s32 ret = 0;
+	s32 raw_data[3];
+
+	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
+	{
+		ret = qma6981_read_fifo_raw(raw_data);
+	}
+	else if((g_qmaX981.chip_type == CHIP_TYPE_QMA7981)||(g_qmaX981.chip_type == CHIP_TYPE_QMA6100))
+	{
+		ret = qma7981_read_fifo_raw(raw_data);
+	}
+	else
+	{
+		ret = 0;
+	}
+	
+	if(1 != ret ){
+		QMAX981_ERR("qmaX981_read_fifo_acc error\n");
+		return ret;
+	}
+	
+	//remap coordinate
+	acc_data[g_qmaX981.cvt.map[0]] = g_qmaX981.cvt.sign[0]*raw_data[0];
+	acc_data[g_qmaX981.cvt.map[1]] = g_qmaX981.cvt.sign[1]*raw_data[1];
+	acc_data[g_qmaX981.cvt.map[2]] = g_qmaX981.cvt.sign[2]*raw_data[2];
+	//QMAX981_LOG("qmaX981 AFTER x1:%d,y:%d,z:%d\n",data[0],data[1],data[2]);
+
+	acc_data[0] = (acc_data[0]*9807)/(g_qmaX981.lsb_1g);
+	acc_data[1] = (acc_data[1]*9807)/(g_qmaX981.lsb_1g);
+	acc_data[2] = (acc_data[2]*9807)/(g_qmaX981.lsb_1g);
+
+	return ret;
+}
+
+static s32 qmaX981_read_fifo(u8 is_raw)
+{
+	s32 ret = 0;
+	u8 databuf[2];
+	s32 acc_data[3];
+	s32 icount;
+	s32 fifo_depth = 32;
+
+	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6100)
+		fifo_depth = 64;
+	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
+		fifo_depth = 16;
+	else
+		fifo_depth = 32;
+
+	ret = qmaX981_readreg(QMAX981_FIFO_STATE, databuf, 1);
+	qmaX981_delay(2);
+
+	QMAX981_LOG("fifo level = %d   %d \r\n", fifo_depth, databuf[0]&0x7f);
+
+	if((databuf[0]&0x7f)==fifo_depth)
+	{
+		for(icount=0; icount<fifo_depth; icount++)
+		{
+			if(is_raw == 1)
+			{
+				if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
+				{
+					ret = qma6981_read_fifo_raw(acc_data);
+				}
+				else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
+				{
+					ret = qma7981_read_fifo_raw(acc_data);
+				}
+				else
+				{
+					ret = 0;
+				}
+			}
+			else
+			{
+				ret = qmaX981_read_fifo_acc(acc_data);
+			}
+			
+			if(ret != 1)
+			{
+				QMAX981_ERR("read 0x3f error!\n");
+				return ret;
+			}
+			qmaX981_fifo_data[icount][0] = acc_data[0];
+			qmaX981_fifo_data[icount][1] = acc_data[1];
+			qmaX981_fifo_data[icount][2] = acc_data[2];
+			QMAX981_LOG("fifo_data %d: %f	%f	%f \r\n", icount, acc_data[0]/1000.00, acc_data[1]/1000.00, acc_data[2]/1000.00);
+		}
+		// read status reg
+	}
+	else
+	{
+		ret = 0;
+	}
+	ret = qmaX981_readreg(QMAX981_INT_STAT1, databuf, 1);
+	qmaX981_delay(2);
+	// write 0x3e
+	ret = qmaX981_writereg(0x3e, 0x40);
+	qmaX981_delay(2);
+
+	return ret;
+}
+#endif
 
 static s32 qma6981_initialize(void)
 {
@@ -309,7 +658,9 @@ static s32 qma7981_initialize(void)
 	qmaX981_readreg(0x18, &reg_0x18, 1);
 	qmaX981_readreg(0x19, &reg_0x19, 1);
 	qmaX981_readreg(0x1a, &reg_0x1a, 1);
-//	qmaX981_readreg(0x2c, &reg_0x2c, 1);
+#if defined(QMA7981_ANY_MOTION)||defined(QMA7981_NO_MOTION)
+	qmaX981_readreg(0x2c, &reg_0x2c, 1);
+#endif
 	// read reg
 	reg_0x10 = 0xe1;
 	qmaX981_writereg(0x10, reg_0x10);
@@ -380,17 +731,31 @@ static s32 qma7981_initialize(void)
 #if defined(QMA7981_ANY_MOTION)
 	reg_0x18 |= 0x07;
 	reg_0x1a |= 0x01;
-	reg_0x2c |= 0x00;
+	reg_0x2c |= 0x00;	//BIT[0-1]	 (ANY_MOT_DUR<1:0> + 1) samples 
 	
 	qmaX981_writereg(0x18, reg_0x18);
 	qmaX981_writereg(0x1a, reg_0x1a);
 	qmaX981_writereg(0x2c, reg_0x2c);
-	//qmaX981_writereg(0x2e, 0x14);		// 0.488*16*32 = 156mg
+	//qmaX981_writereg(0x2e, 0x14);		// 0.488*16*20 = 156mg
 	//qmaX981_writereg(0x2e, 0x80);		// 0.488*16*128 = 1g
+	//qmaX981_writereg(0x2e, 0xa0);		// 0.488*16*160 = 1.25g
 	//qmaX981_writereg(0x2e, 0x60);		// 0.488*16*96 = 750mg
+	//qmaX981_writereg(0x2e, 0x40);		// 0.488*16*64 = 500mg
+	//qmaX981_writereg(0x2e, 0x20);		// 0.488*16*32 = 250mg
 	qmaX981_writereg(0x2e, 0x40);		// 0.488*16*64 = 500mg
+
+#if defined(QMA7981_ABNORMAL_SHAKE_CHECK)
+	reg_0x10 = 0xe0;		// ODR: 65hz 15.48 ms
+	qmaX981_writereg(0x10, reg_0x10);
+	qmaX981_set_range(QMAX981_RANGE_8G);
+	qmaX981_writereg(0x2e, 0x60);		// 0.977*16*96 = 1500mg
+#endif
 	
 #if defined(QMA7981_SIGNIFICANT_MOTION)
+	//SIG_MOT_TPROOF [BIT4-5]<1:0>: 00: T_PROOF=0.25s,  01: T_PROOF=0.5s,  10: T_PROOF=1s,  11: T_PROOF=2s 
+	//SIG_MOT_TSKIP[BIT2-3]<1:0>: 00: T_SKIP=1.5s,  01: T_SKIP=3s,  10: T_SKIP=6s,  11: T_SKIP=12s 
+	//SIG_MOT_SEL: 1: select significant motion interrupt ,  0: select any motion interrupt
+
 	//qmaX981_writereg(0x2f, 0x0c|0x01);
 	qmaX981_writereg(0x2f, 0x01);		// bit0   1 significant motion, 0: any motion.
 
@@ -438,294 +803,277 @@ static s32 qma7981_initialize(void)
 	qmaX981_writereg(0x21, 0x1f);	// default 0x1c, step latch mode
 #endif
 
+#if defined(QMA7981_DOUBLE_TRIPLE_CLICK)
+	//memset(&g_click, 0, sizeof(g_click));
+	g_click.check_click = 1;
+	g_click.click_num = 0;
+	g_click.static_num = 0;
+	g_click.read_data_num = 0;
+
+	g_click.t_msec_1 = 75;
+	g_click.t_msec_2 = 8;
+	g_click.t_msec_out = 300;
+	//g_click.t_msec_1 = 200;
+	//g_click.t_msec_2 = 8;
+	//g_click.t_msec_out = 350;
+#endif
+#if defined(QMA7981_ABNORMAL_SHAKE_CHECK)
+	g_shake.check_shake = 1;
+	g_shake.shake_num = 0;
+	g_shake.t_msec_1 = 200;
+	g_shake.t_msec_out = 500;
+#endif
+
    	return ret;
 }
 
-
-#if defined(QMAX981_FIFO_FUNC)
-static s32 qmaX981_fifo_data[32][3];
-
-static s32 qma6981_read_fifo_raw(s32 *data)
-{
-	//s32 res;	
-	u8 databuf[6] = {0};		
-	u8 i;
-	s32 ret;
-	
-	ret = qmaX981_readreg(0x3f, databuf, 6);
-	qmaX981_delay(2);
-	if(ret != 1)
-	{
-		QMAX981_LOG("qma6981_read_fifo_raw error \n");
-		return ret;
-	}
-
- 	data[0]  = (short)((databuf[1]<<2) |( databuf[0]>>6));
-	data[1]  = (short)((databuf[3]<<2) |( databuf[2]>>6));
-	data[2]  = (short)((databuf[5]<<2) |( databuf[4]>>6));
-
-	for(i=0;i<3;i++)				
-	{	//because the data is store in binary complement number formation in computer system
-		if ( data[i] == 0x0200 )	//so we want to calculate actual number here
-			data[i]= -512;		//10bit resolution, 512= 2^(10-1)
-		else if ( data[i] & 0x0200 )	//transfor format
-		{					//prs32k("data 0 step %x \n",data[i]);
-			data[i] -= 0x1;			//prs32k("data 1 step %x \n",data[i]);
-			data[i] = ~data[i];		//prs32k("data 2 step %x \n",data[i]);
-			data[i] &= 0x01ff;		//prs32k("data 3 step %x \n\n",data[i]);
-			data[i] = -data[i];		
-		}
-#if defined(QMAX981_STEP_COUNTER)
-		data[i] -= QMA6981_OFFSET;
-#endif
-	}
-	//prs32k("qma6981 fifo raw: %d	%d	%d\n", data[0], data[1], data[2]);	
-
-	return 1;	
-}
-
-static s32 qma7981_read_fifo_raw(s32 *data)
-{
-	s32 res;	
-	u8 databuf[6] = {0};
-	s32 ret;
-	
-	ret = qmaX981_readreg(0x3f, databuf, 6);
-	qmaX981_delay(2);
-	if(ret != 1)
-	{
-		QMAX981_LOG("qma7981_read_fifo_raw error \n");
-		return ret;
-	}
-
-	data[0] = (short)((databuf[1]<<8)|(databuf[0]));
-	data[1] = (short)((databuf[3]<<8)|(databuf[2]));
-	data[2] = (short)((databuf[5]<<8)|(databuf[4]));
-	data[0] = data[0]>>2;
-	data[1] = data[1]>>2;
-	data[2] = data[2]>>2;
-
-	//prs32k("qma7981 fifo raw: %d	%d	%d\n", data[0], data[1], data[2]);	
-	return 1;
-}
-
-static s32 qmaX981_read_fifo_acc(s32 *acc_data)
+static s32 qma6100_initialize(void)
 {
 	s32 ret = 0;
-	s32 raw_data[3];
+	s32 index, total;
+	u8 data[2] = {0};
 
-	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
-	{
-		ret = qma6981_read_fifo_raw(raw_data);
-	}
-	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
-	{
-		ret = qma7981_read_fifo_raw(raw_data);
-	}
-	else
-	{
-		ret = 0;
-	}
-	
-	if(1 != ret ){
-		QMAX981_ERR("qmaX981_read_fifo_acc error\n");
-		return ret;
-	}
-	
-	//remap coordinate
-	acc_data[g_qmaX981.cvt.map[0]] = g_qmaX981.cvt.sign[0]*raw_data[0];
-	acc_data[g_qmaX981.cvt.map[1]] = g_qmaX981.cvt.sign[1]*raw_data[1];
-	acc_data[g_qmaX981.cvt.map[2]] = g_qmaX981.cvt.sign[2]*raw_data[2];
-	//QMAX981_LOG("qmaX981 AFTER x1:%d,y:%d,z:%d\n",data[0],data[1],data[2]);
-
-	acc_data[0] = (acc_data[0]*9807)/(g_qmaX981.lsb_1g);
-	acc_data[1] = (acc_data[1]*9807)/(g_qmaX981.lsb_1g);
-	acc_data[2] = (acc_data[2]*9807)/(g_qmaX981.lsb_1g);
-
-	return ret;
-}
-
-static s32 qmaX981_read_fifo(u8 is_raw)
-{
-	s32 ret = 0;
-	u8 databuf[2];
-	s32 acc_data[3];
-	s32 icount;
-	s32 fifo_depth = 32;
-
-	if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
-		fifo_depth = 16;
-	else
-		fifo_depth = 32;
-
-	ret = qmaX981_readreg(QMAX981_FIFO_STATE, databuf, 1);
-	qmaX981_delay(2);
-
-	QMAX981_LOG("fifo level = %d   %d \r\n", fifo_depth, databuf[0]&0x7f);
-
-	if((databuf[0]&0x7f)==fifo_depth)
-	{
-		for(icount=0; icount<fifo_depth; icount++)
+	total = sizeof(qma7981_init_tbl)/sizeof(qma7981_init_tbl[0]);
+	for(index=0; index<total; index++)
+	{	
+		data[0] = qma7981_init_tbl[index][0];
+		data[1] = qma7981_init_tbl[index][1];
+		if(data[0] == 0xff)
 		{
-			if(is_raw == 1)
+			qmaX981_delay(data[1]);
+		}
+		else
+		{
+			if(data[0] == QMAX981_REG_RANGE)
 			{
-				if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
-				{
-					ret = qma6981_read_fifo_raw(acc_data);
-				}
-				else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
-				{
-					ret = qma7981_read_fifo_raw(acc_data);
-				}
+				if(data[1] == QMAX981_RANGE_4G)
+					g_qmaX981.lsb_1g = 2048;
+				else if(data[1] == QMAX981_RANGE_8G)
+					g_qmaX981.lsb_1g = 1024;
+				else if(data[1] == QMAX981_RANGE_16G)
+					g_qmaX981.lsb_1g = 512;
+				else if(data[1] == QMAX981_RANGE_32G)
+					g_qmaX981.lsb_1g = 256;
 				else
-				{
-					ret = 0;
-				}
+					g_qmaX981.lsb_1g = 4096;
 			}
-			else
+			ret = qmaX981_writereg(data[0],data[1]);
+			if(ret == 0)
 			{
-				ret = qmaX981_read_fifo_acc(acc_data);
-			}
-			
-			if(ret != 1)
-			{
-				QMAX981_ERR("read 0x3f error!\n");
+				QMAX981_ERR("qma7981_initialize ret=%d\n", ret);
 				return ret;
 			}
-			qmaX981_fifo_data[icount][0] = acc_data[0];
-			qmaX981_fifo_data[icount][1] = acc_data[1];
-			qmaX981_fifo_data[icount][2] = acc_data[2];
-			QMAX981_LOG("fifo_data %d: %f	%f	%f \r\n", icount, acc_data[0]/1000.00, acc_data[1]/1000.00, acc_data[2]/1000.00);
+			qmaX981_delay(2);
 		}
-		// read status reg
+	}
+
+#if defined(QMA7981_6100_FIFO)
+	qmaX981_write_reg(0x31, 0x20);
+	qmaX981_write_reg(0x3E, 0x40);
+	qmaX981_write_reg(0x17, 0x20);
+	qmaX981_write_reg(0x1a, 0x20);
+	qmaX981_write_reg(0x20, 0x05);
+#if defined(USE_SPI)
+	//qmaX981_write_reg(0x21, 0x21);
+#else
+	//qmaX981_write_reg(0x21, 0x01);
+#endif
+#endif
+
+	return ret;
+}
+
+#if defined(QMAX981_USE_IRQ1)
+extern void bsp_led_set(uint8_t flag);
+extern void mcu_reset_counter(void);
+
+void qst_show_info(char flag)
+{
+	if(flag)
+	{	
+		bsp_led_set(1);
+#if defined(OLED_SUPPORT)
+		OLED_Clear();
+		OLED_ShowString(0,1,"Warning!",16);
+#endif
 	}
 	else
 	{
-		ret = 0;
+		bsp_led_set(0);
+#if defined(OLED_SUPPORT)
+		OLED_Clear();
+#endif
 	}
-	ret = qmaX981_readreg(QMAX981_INT_STAT1, databuf, 1);
-	qmaX981_delay(2);
-	// write 0x3e
-	ret = qmaX981_writereg(0x3e, 0x40);
-	qmaX981_delay(2);
+}
 
-	return ret;
+#if defined(QMA7981_DOUBLE_TRIPLE_CLICK)
+void click_timer_cbk_out(int timerId)
+{
+	bsp_stop_timer(timerId);
+	bsp_stop_timer(1);
+	g_click.check_click = 1;
+	g_click.static_num = 0;
+	g_click.read_data_num = 0;
+	g_click.click_num = 0;
+			
+	console_write("qmaX981_timer_cbk_out \n");	
+}
+
+void click_timer_read_acc(int timerId)
+{
+	int data1, data2, ret;
+
+	ret = qmaX981_read_acc(acc_data_curr);
+	if(ret)
+	{
+		data1 = QMAX981_ABS(acc_data_curr[0])+QMAX981_ABS(acc_data_curr[1])+QMAX981_ABS(acc_data_curr[2]);
+		data2 = QMAX981_ABS(acc_data[0])+QMAX981_ABS(acc_data[1])+QMAX981_ABS(acc_data[2]);
+		//console_write("acc_diff = %d \n", QMAX981_ABS(data1-data2));
+		if(QMAX981_ABS(data1-data2) < 500)
+		{
+			g_click.static_num++;
+		}
+		acc_data[0] = acc_data_curr[0];
+		acc_data[1] = acc_data_curr[1];
+		acc_data[2] = acc_data_curr[2];
+		g_click.read_data_num++;
+	}
+}
+
+int click_timer_check_moving(void)
+{
+	if(g_click.t_msec_2 == 0)
+	{
+		return 0;
+	}
+	else
+	{
+		console_write("read_data_num = %d static_num=%d \n", g_click.read_data_num, g_click.static_num);
+		if(g_click.static_num > (g_click.read_data_num*3/10))
+			return 0;
+		else
+			return 1;
+	}
+}
+
+void click_timer_cbk_1(int timerId)
+{
+	bsp_stop_timer(timerId);
+	g_click.check_click = 1;
+
+	bsp_start_timer(0, g_click.t_msec_out, click_timer_cbk_out);	
+	if(g_click.click_num == 3)
+	{
+		if(click_timer_check_moving())
+		{
+			console_write(" click detect ingor! moving!!! \n");
+		}
+		else
+		{
+			bsp_led_set(1);
+			console_write(" click detect!!! \n");
+		}
+	}
 }
 #endif
 
 
-#if defined(QMAX981_USE_IRQ1)
-unsigned char qmaX981_irq_mask = 0;
-unsigned char qmaX981_a_m_count = 0;
+#if defined(QMA7981_ABNORMAL_SHAKE_CHECK)
+#define SHAKE_ALARM_COUNT	8
 
-typedef struct
+void shake_timer_cbk_out(int timerId)
 {
-	unsigned short time_dura;
-	unsigned short time_max;
-	void (*callback)(unsigned char index);
-}timer_t;
-#define QMAX981_TIME_MAX	2
-static timer_t qmaX981_timer_array[QMAX981_TIME_MAX];
+	bsp_stop_timer(timerId);
+	g_shake.check_shake = 1;
+	g_shake.shake_num = 0;
+			
+	console_write("qmaX981_timer_cbk_out \n");	
+	//qst_show_info(0);
+}
 
-void qmaX981_timer_init(void)
+void shake_timer_cbk_1(int timerId)
 {
-	unsigned char  index;
-
-	for(index=0; index<QMAX981_TIME_MAX; index++)
+	bsp_stop_timer(timerId);
+	g_shake.check_shake = 1;	
+	bsp_start_timer(0, g_shake.t_msec_out, shake_timer_cbk_out);
+	if(g_shake.shake_num >= SHAKE_ALARM_COUNT)
 	{
-		qmaX981_timer_array[index].callback = NULL;
-		qmaX981_timer_array[index].time_dura = 0;
-		qmaX981_timer_array[index].time_max = 0;
+		console_write("abnormal shake, Warning!!! \n");
+		qst_show_info(1);
 	}
 }
-
-void qmaX981_timer_start(unsigned char id, unsigned short time, void (*callback)(unsigned char index))
-{
-	qmaX981_timer_array[id].time_dura = 0;
-	qmaX981_timer_array[id].time_max = time;
-	qmaX981_timer_array[id].callback = callback;
-}
-
-void qmaX981_timer_stop(unsigned char id)
-{
-	qmaX981_timer_array[id].callback = NULL;
-	qmaX981_timer_array[id].time_dura = 0;
-	qmaX981_timer_array[id].time_max = 0;
-}
-
-void qmaX981_timer_run(void)
-{
-	unsigned char  index;
-
-	for(index=0; index<QMAX981_TIME_MAX; index++)
-	{
-		if(qmaX981_timer_array[index].callback)
-		{
-			if(qmaX981_timer_array[index].time_dura >= qmaX981_timer_array[index].time_max)
-			{
-				qmaX981_timer_array[index].callback(index);
-			}
-			else
-			{
-				qmaX981_timer_array[index].time_dura++;
-			}
-		}
-	}
-}
-
-void qmaX981_timer_callback_1(unsigned char index)
-{
-	//console_write(" qmaX981_timer_callback_1 index=%d \n", index);
-	qmaX981_irq_mask = 0;
-	qmaX981_timer_stop(index);
-}
-
-void qmaX981_timer_callback_2(unsigned char index)
-{
-	console_write(" qmaX981_timer_callback_2 index=%d \n", index);
-	qmaX981_a_m_count = 0;
-	qmaX981_timer_stop(index);
-}
-
-
-extern void qst_set_task_delay(unsigned int delay);
-extern void bsp_led_set(uint8_t flag);
+#endif
 
 unsigned char qmaX981_irq_hdlr(void)
 {
 	unsigned char r_data[4];
-	unsigned char reg_0x18 = 0;
+	//unsigned char reg_0x18 = 0;
 	unsigned char reg_0x1a = 0;
 	unsigned char int_type = 0xff;
 
 	qmaX981_readreg(0x09,r_data,3);
-	console_write(" [0x%x 0x%x 0x%x]    \n",r_data[0],r_data[1],r_data[2]);
+//	console_write(" [0x%x 0x%x 0x%x]    \n",r_data[0],r_data[1],r_data[2]);
 	if(r_data[0] & 0xF)
 	{
+#if defined(QMA7981_NO_MOTION)
 		qmaX981_readreg(0x1a,&reg_0x1a,1);
 		reg_0x1a |= 0x80;			// enable nomotion
-		//reg_0x1a &= 0xfe;			// disable anymotion
+		//reg_0x1a &= 0xfe; 		// disable anymotion
 		qmaX981_writereg(0x1a, reg_0x1a);
-		int_type = 1;
-// add by yangzhiqiang
-		qmaX981_timer_start(1, 1100, qmaX981_timer_callback_2);
-// yangzhiqiang
-		qmaX981_a_m_count++;
-		if(qmaX981_a_m_count >= 12)
+#endif
+#if 0//defined(QMA7981_DOUBLE_TRIPLE_CLICK)
+		if(g_click.check_click)
 		{
-			bsp_led_set(1);
+			bsp_stop_timer(0);
+			g_click.check_click = 0;
+			g_click.static_num = 0;			
+			g_click.click_num++;
+			bsp_start_timer(0, g_click.t_msec_1, click_timer_cbk_1);
+			console_write(" any motion! %d\n", g_click.click_num);
+		}		
+#endif
+#if defined(QMA7981_DOUBLE_TRIPLE_CLICK)
+		if(g_click.check_click)
+		{
+			bsp_stop_timer(0);
+			g_click.check_click = 0;
+			g_click.click_num++;
+			bsp_start_timer(0, g_click.t_msec_1, click_timer_cbk_1);
+			// add by yangzhiqiang , read gsensor data, check moving
+			if((g_click.t_msec_2 > 0)&&(g_click.click_num == 1))
+			{
+				g_click.static_num = 0;
+				g_click.read_data_num = 0;
+				bsp_start_timer(1, g_click.t_msec_2, click_timer_read_acc);
+			}
+			// add by yangzhiqiang
+			console_write(" any motion! %d\n", g_click.click_num);
+		}		
+#endif
+
+#if defined(QMA7981_ABNORMAL_SHAKE_CHECK)
+		if(g_shake.check_shake)
+		{
+			bsp_stop_timer(0);
+			g_shake.check_shake = 0;		
+			g_shake.shake_num++;
+			bsp_start_timer(0, g_shake.t_msec_1, shake_timer_cbk_1);
+			console_write(" any motion! %d\n", g_shake.shake_num);
 		}
-		console_write(" any motion! %d\n", qmaX981_a_m_count);
+#endif
+		int_type = 1;
 	}
 	else if(r_data[0] & 0x80)
 	{	
+		bsp_stop_timer(0);
 		qmaX981_readreg(0x1a,&reg_0x1a,1);
 		reg_0x1a &= 0x7f;
 		qmaX981_writereg(0x1a, reg_0x1a);		// disable nomotion
 		int_type = 2;
 		console_write(" no motion!\n");
-		qmaX981_a_m_count = 0;
-		bsp_led_set(0);
+#if defined(OLED_SUPPORT)
+		OLED_Clear();
+#endif
 	}
 	else if(r_data[1] & 0x01)
 	{	
@@ -735,12 +1083,7 @@ unsigned char qmaX981_irq_hdlr(void)
 		reg_0x1a |= 0x80;			// enable nomotion
 		//reg_0x1a &= 0xfe;			// disable anymotion
 		qmaX981_writereg(0x1a, reg_0x1a);
-		qmaX981_a_m_count++;
 		console_write(" significant motion!\n");
-		if(qmaX981_a_m_count >=2)
-		{
-			bsp_led_set(1);
-		}
 	}
 	else if(r_data[1] & 0x40)
 	{	
@@ -783,7 +1126,7 @@ static void qmaX981_setup_irq1(void)
     GPIO_EXTILineConfig(GPIO_PortSourceGPIOA,GPIO_PinSource11);//PC11  为GPIOC的PIN11  
     EXTI_InitStructure.EXTI_Line= EXTI_Line11; //PC11，为：EXTI_Line11  
     EXTI_InitStructure.EXTI_Mode= EXTI_Mode_Interrupt;   
-    EXTI_InitStructure.EXTI_Trigger= EXTI_Trigger_Rising_Falling;   //中断方式为上升与下降沿  
+    EXTI_InitStructure.EXTI_Trigger= EXTI_Trigger_Rising;   //中断方式为上升与下降沿  
     EXTI_InitStructure.EXTI_LineCmd=ENABLE;  
     EXTI_Init(&EXTI_InitStructure);  
           
@@ -799,58 +1142,67 @@ void EXTI15_10_IRQHandler(void)         //这里为：EXTI15_10 (外部中断号的10~15都
 {
 	u8 ret;
 	u8 data[2];
-	s32 step_num;
-	
-#if defined(QMAX981_TAP_FUNC)
-	ret = qmaX981_readreg(QMAX981_INT_STAT0, data, 1);
-	QMAX981_LOG("EXTI15_10_IRQHandler value_0a=%x \r\n", data[0]);
-	if(EXTI_GetITStatus(EXTI_Line11) != RESET)
-	{
-		EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断  
-		QMAX981_LOG("EXTI_ClearITPendingBit\r\n");
-	}
-#endif
 #if defined(QMAX981_STEP_DEBOUNCE_IN_INT)	
-	if(EXTI_GetITStatus(EXTI_Line11) != RESET) //这里为判断相应的中断号是否进入中断，如果有多个中断的话。  
+	s32 step_num;
+#endif
+
+	if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
 	{
-		g_qmaX981.s32_level = GPIO_ReadInputDataBit(QMAX981_IRQ1_PORT,QMAX981_IRQ1_PIN);		
-		ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
-		if(ret)
+		if(EXTI_GetITStatus(EXTI_Line11) != RESET) //这里为判断相应的中断号是否进入中断，如果有多个中断的话。  
 		{
-			step_num = (data[1]<<8)|data[0];
-			QMAX981_LOG("gpio level = %d step_num=%d \r\n", g_qmaX981.s32_level, step_num);
-			qmaX981_step_debounce_s32_work(step_num, g_qmaX981.s32_level);
-		}
-		EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断  
-		QMAX981_LOG("EXTI_ClearITPendingBit\r\n");
-	}
-#endif
-#if defined(QMAX981_FIFO_USE_INT)
-	if(EXTI_GetITStatus(EXTI_Line11) != RESET) //这里为判断相应的中断号是否进入中断，如果有多个中断的话。  
-	{
-		u8 reg_5b;
-		
-		ret = qmaX981_readreg(0x5b, &reg_5b, 1);
-		QMAX981_LOG("reg_5b=0x%x \r\n", reg_5b);
-		qmaX981_read_fifo(0);		
-		EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断  
-	}
-#endif
-#if 1//defined(QMA7981_IRQ_TEST)
-	if(EXTI_GetITStatus(EXTI_Line11) != RESET) //这里为判断相应的中断号是否进入中断，如果有多个中断的话。  
-	{
-		EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断  
-		if(qmaX981_irq_mask == 0)
-		{
-#if !defined(QMA7981_SIGNIFICANT_MOTION)
-			qmaX981_irq_mask = 1;
-			//qst_set_task_delay(200);
-			qmaX981_timer_start(0, 200, qmaX981_timer_callback_1);
-#endif
+			EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断
+			mcu_reset_counter();
 			qmaX981_irq_hdlr();
 		}
 	}
+#if defined(QMA7981_6100_FIFO)
+	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA6100)
+	{
+		if(EXTI_GetITStatus(EXTI_Line11) != RESET) //这里为判断相应的中断号是否进入中断，如果有多个中断的话。  
+		{
+			EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断
+			qmaX981_read_fifo(1);
+		}
+	}
 #endif
+	else
+	{
+#if defined(QMAX981_TAP_FUNC)
+		ret = qmaX981_readreg(QMAX981_INT_STAT0, data, 1);
+		QMAX981_LOG("EXTI15_10_IRQHandler value_0a=%x \r\n", data[0]);
+		if(EXTI_GetITStatus(EXTI_Line11) != RESET)
+		{
+			EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断  
+			QMAX981_LOG("EXTI_ClearITPendingBit\r\n");
+		}
+#endif
+#if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
+		if(EXTI_GetITStatus(EXTI_Line11) != RESET) //这里为判断相应的中断号是否进入中断，如果有多个中断的话。  
+		{
+			g_qmaX981.s32_level = GPIO_ReadInputDataBit(QMAX981_IRQ1_PORT,QMAX981_IRQ1_PIN);		
+			ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
+			if(ret)
+			{
+				step_num = (data[1]<<8)|data[0];
+				QMAX981_LOG("gpio level = %d step_num=%d \r\n", g_qmaX981.s32_level, step_num);
+				qmaX981_step_debounce_s32_work(step_num, g_qmaX981.s32_level);
+			}
+			EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断  
+			QMAX981_LOG("EXTI_ClearITPendingBit\r\n");
+		}
+#endif
+#if defined(QMAX981_FIFO_USE_INT)
+		if(EXTI_GetITStatus(EXTI_Line11) != RESET) //这里为判断相应的中断号是否进入中断，如果有多个中断的话。  
+		{
+			u8 reg_5b;
+			
+			ret = qmaX981_readreg(0x5b, &reg_5b, 1);
+			QMAX981_LOG("reg_5b=0x%x \r\n", reg_5b);
+			qmaX981_read_fifo(0);		
+			EXTI_ClearITPendingBit(EXTI_Line11);		 //清中断  
+		}
+#endif
+	}
 }
 
 #endif
@@ -914,35 +1266,47 @@ s32 qmaX981_init(void)
 	if((g_qmaX981.chip_id>=0xa9) && (g_qmaX981.chip_id<=0xb9))
 	{		
 		QMAX981_LOG("qma6981 find \n");
-		g_qmaX981.chip_type = CHIP_TYPE_QMA6981;	
+		g_qmaX981.chip_type = CHIP_TYPE_QMA6981;
 	}
-	else if((g_qmaX981.chip_id>=0xe0) && (g_qmaX981.chip_id<=0xe9))	
+	else if((g_qmaX981.chip_id>=0xe0) && (g_qmaX981.chip_id<=0xe7))	
 	{
-		QMAX981_LOG("qma7981 find \n");		
-		g_qmaX981.chip_type = CHIP_TYPE_QMA7981;	
+		QMAX981_LOG("qma7981 find \n");
+		g_qmaX981.chip_type = CHIP_TYPE_QMA7981;
 	}	
-	else	
+	else if(g_qmaX981.chip_id==0xe8)	
+	{
+		QMAX981_LOG("qma6100 find \n");		
+		g_qmaX981.chip_type = CHIP_TYPE_QMA6100;	
+	}
+	else
 	{		
 		QMAX981_LOG("qma acc chip id not defined!!! \n");		
-		g_qmaX981.chip_type = CHIP_TYPE_UNDEFINE;	
+		g_qmaX981.chip_type = CHIP_TYPE_UNDEFINE;
 	}
 	// add by yangzhiqiang use another i2c addr
 	if(g_qmaX981.chip_type == CHIP_TYPE_UNDEFINE)
 	{
 		QMAX981_LOG("qmaX981 change I2C add = 0x%x! \n", QMAX981_I2C_SLAVE_ADDR2);		
 		qmaX981_delay(100);
+#if !defined(USE_SPI)
 		QMAX981_I2C_ADDR_W = QMAX981_I2C_SLAVE_ADDR2;
+#endif
 		g_qmaX981.chip_id = qmaX981_chip_id();
 		if((g_qmaX981.chip_id>=0xa9) && (g_qmaX981.chip_id<=0xb9))
-		{		
+		{
 			QMAX981_LOG("qma6981 find \n");
 			g_qmaX981.chip_type = CHIP_TYPE_QMA6981;	
 		}
-		else if((g_qmaX981.chip_id>=0xe0) && (g_qmaX981.chip_id<=0xe9))	
+		else if((g_qmaX981.chip_id>=0xe0) && (g_qmaX981.chip_id<=0xe7))	
 		{
 			QMAX981_LOG("qma7981 find \n");		
 			g_qmaX981.chip_type = CHIP_TYPE_QMA7981;	
-		}	
+		}		
+		else if(g_qmaX981.chip_id==0xe8)	
+		{
+			QMAX981_LOG("qma6100 find \n"); 	
+			g_qmaX981.chip_type = CHIP_TYPE_QMA6100;	
+		}
 		else	
 		{		
 			QMAX981_LOG("qma acc chip id not defined!!! \n");		
@@ -952,8 +1316,10 @@ s32 qmaX981_init(void)
 	// add by yangzhiqiang
 	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)		
 		ret = qma6981_initialize();	
-	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)		
+	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
 		ret = qma7981_initialize();
+	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA6100)
+		ret = qma6100_initialize();
 	else
 		ret = 0;
 
@@ -967,139 +1333,9 @@ s32 qmaX981_init(void)
 #if defined(QMAX981_USE_IRQ1)
 	qmaX981_setup_irq1();
 #endif
-	qmaX981_timer_init();
 
 	return ret;
 }
 
-
-static s32 qma6981_read_raw_xyz(s32 *data)
-{
-	//s32 res;	
-	u8 databuf[6] = {0};		
-	u8 i;
-	s32 ret;
-
-	ret = qmaX981_readreg(QMAX981_XOUTL, databuf, 6);
-	if(ret == 0){
-		QMAX981_ERR("read xyz error!!!");
-		return 0;	
-	}
- 	data[0]  = (short)((databuf[1]<<2) |( databuf[0]>>6));
-	data[1]  = (short)((databuf[3]<<2) |( databuf[2]>>6));
-	data[2]  = (short)((databuf[5]<<2) |( databuf[4]>>6));
-
-	for(i=0;i<3;i++)				
-	{	//because the data is store in binary complement number formation in computer system
-		if ( data[i] == 0x0200 )	//so we want to calculate actual number here
-			data[i]= -512;		//10bit resolution, 512= 2^(10-1)
-		else if ( data[i] & 0x0200 )	//transfor format
-		{					//prs32k("data 0 step %x \n",data[i]);
-			data[i] -= 0x1;			//prs32k("data 1 step %x \n",data[i]);
-			data[i] = ~data[i];		//prs32k("data 2 step %x \n",data[i]);
-			data[i] &= 0x01ff;		//prs32k("data 3 step %x \n\n",data[i]);
-			data[i] = -data[i];		
-		}
-#if defined(QMAX981_STEP_COUNTER)
-		data[i] -= QMA6981_OFFSET;
-#endif
-	}
-
-	//prs32k("yzqaccraw	%d	%d	%d\n", data[0], data[1], data[2]);
-	return 1;
-}
-
-static s32 qma7981_read_raw_xyz(s32 *data)
-{
-	u8 databuf[6] = {0}; 	
-	s32 ret;
-	//qma7981_acc_format data_14bit;
-
-	ret = qmaX981_readreg(QMAX981_XOUTL, databuf, 6);
-	if(ret == 0){
-		QMAX981_ERR("7981 read xyz error!!!");
-		return 0;	
-	}
-
-	data[0] = (short)((databuf[1]<<8)|(databuf[0]));
-	data[1] = (short)((databuf[3]<<8)|(databuf[2]));
-	data[2] = (short)((databuf[5]<<8)|(databuf[4]));
-	data[0] = data[0]>>2;
-	data[1] = data[1]>>2;
-	data[2] = data[2]>>2;
-
-	return 1;
-}
-
-s32 qmaX981_read_raw(s32 *rawData)
-{
-	s32 ret;
-
-	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)		
-		ret = qma6981_read_raw_xyz(rawData);	
-	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)		
-		ret = qma7981_read_raw_xyz(rawData);
-	else
-		ret = 0;
-
-	return ret;
-}
-
-
-s32 qmaX981_read_acc(s32 *accData)
-{
-	s32 ret;
-	s32 rawData[3];
-
-	ret = qmaX981_read_raw(rawData);
-	accData[g_qmaX981.cvt.map[0]] = g_qmaX981.cvt.sign[0]*rawData[0];
-	accData[g_qmaX981.cvt.map[1]] = g_qmaX981.cvt.sign[1]*rawData[1];
-	accData[g_qmaX981.cvt.map[2]] = g_qmaX981.cvt.sign[2]*rawData[2];
-
-	accData[0] = (accData[0]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
-	accData[1] = (accData[1]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
-	accData[2] = (accData[2]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
-
-	if(ret)
-	{
-		//console_write("acc %f %f %f\n",accData[0]/1000.0f, accData[1]/1000.0f, accData[2]/1000.0f);
-	}
-
-	return ret;
-
-}
-
-#if defined(QMAX981_STEPCOUNTER)
-u32 qmaX981_read_stepcounter(void)
-{
-	u8 data[3];
-	s32 ret;
-	u32 step_num;
-
-	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
-	{
-		ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
-		step_num = (data[1]<<8)|data[0];
-	}
-	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
-	{	
-		ret = qmaX981_readreg(QMAX981_STEP_CNT_L, data, 2);
-		ret = qmaX981_readreg(QMA7981_STEP_CNT_M, &data[2], 1);
-		step_num = (u32)(((u32)data[2]<<16)|((u32)data[1]<<8)|data[0]);
-	}
-#if defined(QMAX981_CHECK_ABNORMAL_DATA)
-	ret=qmaX981_check_abnormal_data(step_num, &step_num);
-	if(ret != 0)
-	{
-		return -1;
-	}
-#endif
-#if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
-	step_num = qmaX981_step_debounce_read_data(step_num);
-#endif
-
-	return step_num;
-}
-#endif
 
 

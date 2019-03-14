@@ -115,7 +115,7 @@ void spi_struct_config(int mode)
 		SPI_InitStructure.SPI_CPHA = SPI_CPHA_2Edge;
 	}
 	SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
-	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_256;
+	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16;	//SPI_BaudRatePrescaler_256;
 	SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
 	SPI_InitStructure.SPI_CRCPolynomial = 7;
 	SPI_Init(QST_SPIx , &SPI_InitStructure);

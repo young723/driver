@@ -1,25 +1,32 @@
 #ifndef __QMAX981_H
 #define __QMAX981_H
 
+#if defined(USE_SW_IIC)
 #define QMAX981_USE_SW_IIC
-//#define QMAX981_USE_SPI
+#endif
+//#define USE_SPI
 
-#define QMAX981_STEPCOUNTER
+#define QMA7981_DOUBLE_TRIPLE_CLICK
+//#define QMA7981_ABNORMAL_SHAKE_CHECK
+
+//#define QMAX981_STEPCOUNTER
 #define QMAX981_USE_IRQ1
 #define QMA7981_ANY_MOTION
-#define QMA7981_NO_MOTION
-#define QMA7981_SIGNIFICANT_MOTION
+//#define QMA7981_NO_MOTION
+//#define QMA7981_SIGNIFICANT_MOTION
 
 #include "stm32f10x.h"
 #include "bsp_usart.h"
-#if defined(QMAX981_USE_SPI)
+#if defined(USE_SPI)
 #include "bsp_spi.h"
 #elif defined(QMAX981_USE_SW_IIC)
 #include "qst_sw_i2c.h"
 #else
 #include "bsp_i2c.h"
 #endif
-
+#if defined(QMA7981_DOUBLE_TRIPLE_CLICK)||defined(QMA7981_ABNORMAL_SHAKE_CHECK)
+#include "bsp_timer.h"
+#endif
 #include <stdbool.h>
 #include <string.h>
 
@@ -109,11 +116,6 @@ typedef enum
 
 
 /* Accelerometer Sensor Full Scale */
-#define QMAX981_RANGE_2G			0x01
-#define QMAX981_RANGE_4G			0x02
-#define QMAX981_RANGE_8G			0x04
-#define QMAX981_RANGE_16G			0x08
-#define QMAX981_RANGE_32G			0x0f
 
 #define QMAX981_IRQ1_RCC			RCC_APB2Periph_GPIOA  
 #define QMAX981_IRQ1_PORT			GPIOA 
@@ -124,6 +126,29 @@ typedef enum
 #define QMAX981_IRQ2_PORT			GPIOA 
 #define QMAX981_IRQ2_PIN			GPIO_Pin_5  
 #define QMAX981_IRQ2_LINE			EXTI_Line5
+
+#if defined(QMA7981_DOUBLE_TRIPLE_CLICK)
+typedef struct
+{
+	unsigned char check_click;
+	unsigned short click_num;
+	unsigned short read_data_num;
+	unsigned short static_num;
+	unsigned short t_msec_1;			// check_click timer
+	unsigned short t_msec_2;			// check static timer
+	unsigned short t_msec_out;			// timeout
+}qst_click_check;
+#endif
+
+#if defined(QMA7981_ABNORMAL_SHAKE_CHECK)
+typedef struct
+{
+	unsigned char check_shake;
+	unsigned short shake_num;
+	unsigned short t_msec_1;
+	unsigned short t_msec_out;			// timeout
+}qst_shake_check;
+#endif
 
 extern s32 qmaX981_init(void);
 extern s32 qmaX981_read_acc(s32 *accData);
