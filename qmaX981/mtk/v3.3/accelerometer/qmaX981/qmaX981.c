@@ -155,6 +155,8 @@ static int	auto_cali_data[3];
 #if defined(GSENSOR_IOCTL_SET_STEPCOUNTER)
 static u64 step_algo_num = 0;
 #endif
+static struct wake_lock qma_wakelock;
+static int wake_lock_status = 0;
 
 const unsigned char qma6981_init_tbl[][2] = 
 {
@@ -406,6 +408,22 @@ static int qmaX981_write_reg(unsigned char reg, unsigned char value)
 	databuf[0] = reg;
 	databuf[1] = value;
 	return qmaX981_TxData(databuf,2);
+}
+
+static void qmaX981_set_wakelock(int en)
+{
+	if((en == 1)&&(wake_lock_status == 0))
+	{
+		wake_lock(&qma_wakelock);
+		wake_lock_status = 1;
+		//QMAX981_LOG("yzqlock enable wakelock\n");
+	}
+	else if((en == 0)&&(wake_lock_status == 1))
+	{
+		wake_unlock(&qma_wakelock);		
+		wake_lock_status = 0;
+		//QMAX981_LOG("yzqlock disable wakelock\n");
+	}
 }
 
 static int qmaX981_set_mode(unsigned char enable)
@@ -763,7 +781,7 @@ static int qmaX981_read_acc_xyz(int *data){
 }
 
 #if defined(QMAX981_FIFO_FUNC)
-static int qmaX981_fifo_data[32][3];
+static int qmaX981_fifo_data[64][3];
 
 static int qma6981_read_fifo_raw(int *data)
 {
@@ -1813,7 +1831,7 @@ static int qma7981_initialize(void)
 #if defined(QMA7981_NO_MOTION)
 	reg_0x18 |= 0xe0;
 	reg_0x1a |= 0x80;
-	reg_0x2c |= 0x24;
+	reg_0x2c |= 0x08;		//3s
 
 	qmaX981_write_reg(0x18, reg_0x18);
 	qmaX981_write_reg(0x1a, reg_0x1a);
@@ -2565,6 +2583,7 @@ static int qmaX981_resume(struct i2c_client *client)
 #if defined(QMAX981_INT1_FUNC)
 static irqreturn_t qmaX981_irq1_handle(int irq, void *desc)
 {
+	disable_irq_nosync(qmaX981->irq1_num);
 	if(qmaX981)
 	{
 		schedule_work(&qmaX981->irq1_work);
@@ -2580,17 +2599,22 @@ static void qmaX981_irq1_work_step(struct work_struct *work)
 	char databuf[2];
 	int result;
 
+	qmaX981_set_wakelock(1);
 	QMAX981_FUN();
-	//disable_irq(qmaX981->irq1_num);
-	
 	databuf[0] = QMAX981_STEP_CNT_L;
 	if((res = qmaX981_RxData(databuf, 2))){
 		if((res = qmaX981_RxData(databuf, 2)))
 		{
-			QMAX981_ERR("int read stepcounter error!!!\n");
-			enable_irq(qmaX981->irq1_num);
-			return;
+
 		}
+	}
+	qmaX981_set_wakelock(0);
+
+	if(res)
+	{
+		QMAX981_ERR("int read stepcounter error!!!\n");
+		enable_irq(qmaX981->irq1_num);
+		return;
 	}
 	result = (databuf[1]<<8)|databuf[0];
 	
@@ -2614,21 +2638,89 @@ static void qmaX981_irq1_work_step(struct work_struct *work)
 
 	enable_irq(qmaX981->irq1_num);
 }
-#else
+#endif
+
 static void qmaX981_irq1_work(struct work_struct *work)
 {
-	QMAX981_FUN();
+	unsigned char r_data[4];
+	int res, retry;
 
+	qmaX981_set_wakelock(1);
 	QMAX981_LOG("irq1 interrupt!!!");
 	//kpd_send_powerkey(0);
 
+	retry = 0;
+	r_data[0] = 0x09;
+	while(retry < 3)
+	{
+		res = qmaX981_RxData(r_data, 3);
+		if(res == 0)
+			break;
+		retry++;
+	}
+	qmaX981_set_wakelock(0);
+	if(res)
+	{
+		enable_irq(qmaX981->irq1_num);
+		QMAX981_ERR("read i2c error!!!\n");
+		return;
+	}
+
+	if(r_data[0] & 0xF)
+	{	
+#if 0//defined(QMA7981_NO_MOTION)
+		qmaX981_readreg(0x1a,&reg_0x1a,1);
+		reg_0x1a |= 0x80;			// enable nomotion
+		//reg_0x1a &= 0xfe; 		// disable anymotion
+		qmaX981_writereg(0x1a, reg_0x1a);
+#endif
+		QMAX981_LOG(" any motion!\n");
+	}
+	else if(r_data[0] & 0x80)
+	{	
+#if 0//defined(QMA7981_NO_MOTION)
+		qmaX981_read_reg(0x1a,&reg_0x1a,1);
+		reg_0x1a &= 0x7f;
+		qmaX981_write_reg(0x1a, reg_0x1a);		// disable nomotion
+#endif
+		QMAX981_LOG(" no motion!\n");
+	}
+	else if(r_data[1] & 0x01)
+	{	
+#if 0//defined(QMA7981_NO_MOTION)
+		qmaX981_read_reg(0x1a,&reg_0x1a,1);
+		reg_0x1a |= 0x80;			// enable nomotion
+		//reg_0x1a &= 0xfe;			// disable anymotion
+		qmaX981_write_reg(0x1a, reg_0x1a);
+#endif
+		QMAX981_LOG(" significant motion!\n");
+	}
+	else if(r_data[1] & 0x40)
+	{	
+		QMAX981_LOG("  significant step int!\n");
+	}
+	else if(r_data[1] & 0x08)
+	{
+		QMAX981_LOG(" step int!\n");
+	}
+#if defined(QMA7981_HAND_UP_DOWN)
+	else if(r_data[1] & 0x02)
+	{
+		QMAX981_LOG(" hand raise!\n");
+	}
+	else if(r_data[1] & 0x04)
+	{
+		QMAX981_LOG(" hand down!\n");
+	}
+#endif
+
 	enable_irq(qmaX981->irq1_num);
 }
-#endif
 
 static int qmaX981_irq1_config(void)
 {
-	struct qmaX981_data *obj = i2c_get_clientdata(qmaX981_i2c_client);        
+	struct qmaX981_data *obj = i2c_get_clientdata(qmaX981_i2c_client);    
+	int gpio_num = 0;
 	/*
 	int ret;
 	struct pinctrl *pinctrl;
@@ -2639,10 +2731,11 @@ static int qmaX981_irq1_config(void)
 	QMAX981_FUN();
 
 #if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
-	INIT_WORK(&qmaX981->irq1_work, qmaX981_irq1_work_step);
-#else
-	INIT_WORK(&qmaX981->irq1_work, qmaX981_irq1_work);
+	if(qmaX981->chip_type == CHIP_TYPE_QMA6981)
+		INIT_WORK(&qmaX981->irq1_work, qmaX981_irq1_work_step);
+	else
 #endif
+	INIT_WORK(&qmaX981->irq1_work, qmaX981_irq1_work);
 
 	/*
 	pinctrl = devm_pinctrl_get(&qma6981_dev->dev);
@@ -2684,7 +2777,11 @@ static int qmaX981_irq1_config(void)
 			return -EINVAL;
 		}
 */
-		obj->irq1_num = gpio_to_irq(of_get_named_gpio_flags(obj->irq1_node,"gse_1,gse_1_gpio", 0, NULL));
+		//gpio_num = of_get_named_gpio_flags(obj->irq1_node,"gse_1_irq", 0, NULL);
+		gpio_num = of_get_named_gpio(obj->irq1_node,"gse_1_irq", 0);
+		QMAX981_LOG("gpio_num = %d\n", gpio_num);
+	//mt_set_gpio_dir(gpio_num, GPIO_DIR_IN);
+		obj->irq1_num = gpio_to_irq(gpio_num);
 		QMAX981_LOG("irq1_num = %d\n", obj->irq1_num);
 		if(request_irq(obj->irq1_num, qmaX981_irq1_handle, IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND, "mediatek, gse_1-eint", NULL)) {
 			QMAX981_ERR("IRQ LINE NOT AVAILABLE!!\n");
@@ -2708,6 +2805,7 @@ static int qmaX981_irq1_config(void)
 #if defined(QMAX981_INT2_FUNC)
 static irqreturn_t qmaX981_irq2_handle(int irq, void *desc)
 {
+	disable_irq_nosync(qmaX981->irq2_num);
 	if(qmaX981)
 	{
 		schedule_work(&qmaX981->irq2_work);
@@ -2717,14 +2815,18 @@ static irqreturn_t qmaX981_irq2_handle(int irq, void *desc)
 }
 
 static void qmaX981_irq2_work(struct work_struct *work)
-{
-	QMAX981_FUN();
+{	
+	qmaX981_set_wakelock(1);
+	QMAX981_LOG("irq2 interrupt!!!");
+	qmaX981_set_wakelock(0);
+
 	enable_irq(qmaX981->irq2_num);
 }
 
 static int qmaX981_irq2_config(void)
 {
 	struct qmaX981_data *obj = i2c_get_clientdata(qmaX981_i2c_client);		  
+	int gpio_num = 0;
 	/*
 	int ret;
 	struct pinctrl *pinctrl;
@@ -2767,7 +2869,10 @@ static int qmaX981_irq2_config(void)
 		pinctrl_select_state(pinctrl, pins_cfg);
 		QMAX981_LOG("ints[0] = %d, ints[1] = %d!!\n", ints[0], ints[1]);
 */
-		obj->irq2_num = irq_of_parse_and_map(obj->irq2_node, 0);
+		gpio_num = of_get_named_gpio(obj->irq1_node,"gse_2_irq", 0);
+
+		//obj->irq2_num = irq_of_parse_and_map(obj->irq2_node, 0);
+		obj->irq2_num = gpio_to_irq(gpio_num);
 		QMAX981_LOG("irq2_num = %d\n", obj->irq2_num);
 		if (!obj->irq2_num) {
 			QMAX981_ERR("irq_of_parse_and_map fail!!\n");
@@ -2924,6 +3029,7 @@ static int qmaX981_i2c_probe(struct i2c_client *client, const struct i2c_device_
 	qmaX981_auto_cali_reset();
 	qmaX981_auto_cali_update(auto_cali_data);
 #endif
+	wake_lock_init(&qma_wakelock,WAKE_LOCK_SUSPEND,"qmaLock");
 	qmaX981_init_flag = 0;
 	return 0;
 

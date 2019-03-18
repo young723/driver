@@ -13,6 +13,10 @@
 //#define QMAX981_INT2_FUNC
 //#define QMAX981_FIFO_FUNC
 //#define QMAX981_AUTO_CALI
+//#define QMA7981_ANY_MOTION
+//#define QMA7981_NO_MOTION
+//#define QMAX981_INT1_FUNC
+
 
 #if defined(QMAX981_STEP_COUNTER)
 #include "step_counter.h"
