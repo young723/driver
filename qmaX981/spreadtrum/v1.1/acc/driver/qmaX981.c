@@ -544,10 +544,10 @@ static int qma6981_initialize(struct qmaX981_data *qmaX981)
 	data = 0x8f;
 	rc = qmaX981_smbus_write_byte(qmaX981->client,0x12,&data);
 
-	data = 0x0a;		//0x0d; QST0103 2019/03/06.
+	data = 0x0c;		//0x0d; QST0103 2019/03/06.
 	rc = qmaX981_smbus_write_byte(qmaX981->client,0x13,&data);
 
-	data = 0x14;
+	data = 0x13;
 	rc = qmaX981_smbus_write_byte(qmaX981->client,0x14,&data);
 
 	data = 0x10;
@@ -951,6 +951,7 @@ static void QMA6981_eint_work(struct work_struct *work)
 	struct qmaX981_data *qmaX981 = i2c_get_clientdata(this_client);
 	//int gpio39_status = -1;	
 	int res = 0,temp = 0;
+	int retry;
 	unsigned char databuf[6]; 
 	u16 data = 0;
 //	gpio39_status = gpio_get_value(QMAX981_IRQ_NUMBER);
@@ -959,16 +960,22 @@ static void QMA6981_eint_work(struct work_struct *work)
 	qma6981_set_wakelock(1);
 	if(qmaX981 && qmaX981->client)
 	{
-		res	= qmaX981_smbus_read_block(qmaX981->client, QMA6981_STEPCOUNT, databuf, 2);
-		if(res)
-		{		
+		retry = 0;
+		while(retry < 5)
+		{
 			res	= qmaX981_smbus_read_block(qmaX981->client, QMA6981_STEPCOUNT, databuf, 2);
-			if(res)
+			if(res == 0)
 			{
-				enable_irq(qmaX981->irq);
-				qma6981_set_wakelock(0);
-				return;
+				break;
 			}
+			retry++;
+		}
+		if(res)
+		{
+			GSE_LOG("QMA6981_eint_work read i2c error!");
+			enable_irq(qmaX981->irq);
+			qma6981_set_wakelock(0);
+			return;
 		}
 	}
 	else
@@ -2523,8 +2530,11 @@ static int qmaX981_i2c_probe(struct i2c_client *client,
 #endif 
 
 #ifdef QMA6981_STEP_COUNTER_USE_INT
-	INIT_WORK(&qmaX981->eint_work, QMA6981_eint_work); 
-	QMA6981_setup_eint(this_client);	
+	if(g_qmaX981->chip_type == CHIP_TYPE_QMA6981)
+	{
+		INIT_WORK(&qmaX981->eint_work, QMA6981_eint_work); 
+		QMA6981_setup_eint(this_client);
+	}
 #endif
 
 	err = qmaX981_input_init(qmaX981);
