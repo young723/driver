@@ -501,7 +501,7 @@ void qmaX981_custom_get_data(kal_uint16 *x_adc, kal_uint16 *y_adc, kal_uint16 *z
 	*z_adc = (kal_uint16 )data_acc[2];
 	
 #ifndef WIN32
-	QMAX981_INFO(MOD_MATV, "acc raw data [%d %d %d]", data_acc[0], data_acc[1], data_acc[2]);
+	QMAX981_INFO(MOD_MATV, "qmaX981_custom_get_data [%d %d %d]", data_acc[0], data_acc[1], data_acc[2]);
 #endif
 }
 
@@ -517,11 +517,11 @@ kal_bool qmaX981_get_acc_mg(kal_int32 *x_adc, kal_int32 *y_adc, kal_int32 *z_adc
 	*y_adc = (raw_data[1]*GRAVITY_1G)/g_qmaX981.lsb_1g;
 	*z_adc = (raw_data[2]*GRAVITY_1G)/g_qmaX981.lsb_1g;
 
-	QMAX981_INFO(MOD_MATV, "acc raw data [%d %d %d]", *x_adc, *y_adc, *z_adc);
+	QMAX981_INFO(MOD_MATV, "qmaX981_get_acc_mg [%d %d %d]", *x_adc, *y_adc, *z_adc);
 }
 
 
-#if defined(QMAX981_STEP_COUNTER)
+#if defined(QMAX981_STEPCOUNTER)
 kal_bool qmaX981_custom_get_step(kal_uint32 *step)
 {
 	kal_bool bResult=KAL_FALSE;	
@@ -551,7 +551,7 @@ kal_bool qmaX981_custom_get_step(kal_uint32 *step)
 	}
 	else if(g_qmaX981.chip_type == QMAX981_TYPE_7981)
 	{
-		bResult = gsensor_i2c_read_bytes(0x0e, databuf[2], 1);
+		bResult = gsensor_i2c_read_bytes(0x0e, &databuf[2], 1);
 		if(bResult == KAL_FALSE)
 		{
 			QMAX981_ERROR(MOD_MATV, "[E]----[%s]: Motion Sensor get step fail!\r\n", __func__);
@@ -732,7 +732,7 @@ static kal_bool qmaX981_set_mode(kal_bool mode)
 {
     kal_bool  bResult=KAL_FALSE;
 
-#if defined(QMAX981_STEP_COUNTER)
+#if defined(QMAX981_STEPCOUNTER)
 	mode =  KAL_TRUE;
 #endif
 	if(mode == KAL_TRUE)	
@@ -799,7 +799,7 @@ static kal_bool qma6981_custom_init(void)
 
 	bResult = gsensor_i2c_write_byte(0x16, reg_0x16);
 	bResult = gsensor_i2c_write_byte(0x19, reg_0x19);
-#if defined(QMAX981_STEP_COUNTER)
+#if defined(QMAX981_STEPCOUNTER)
 	#if 0
 	bResult = gsensor_i2c_write_byte(QMAX981_ODR, 0x06);	
 	bResult = gsensor_i2c_write_byte(0x11, 0x89);
@@ -898,7 +898,7 @@ static kal_bool qma6981_custom_init(void)
 	}
 	 bResult = gsensor_i2c_write_byte(0x11, 0x80); 
 #elif defined(QMA6891_EXTRA_FUNC_3)
-	#if !defined(QMAX981_STEP_COUNTER)
+	#if !defined(QMAX981_STEPCOUNTER)
 	bResult = gsensor_i2c_write_byte(0x10, 0x06); // 6:ODR是500HZ采样  5:250HZ	建议是6，5不太灵敏
 	#endif
 	// TAP_QUIET<7>: tap quiet time, 1: 30ms, 0: 20ms 
@@ -934,6 +934,59 @@ static kal_bool qma6981_custom_init(void)
 	return bResult;
 }
 
+#if defined(QMA7981_HAND_UP_DOWN)
+void qma7981_set_hand_up_down(void)
+{
+#if defined(QMA7981_SWAP_XY)
+	unsigned char reg_0x42 = 0;
+#endif
+	unsigned char reg_0x1e = 0;
+	unsigned char reg_0x34 = 0;
+	unsigned char yz_th_sel = 4;
+	char y_th = 2;				// -16 ~ 15
+	unsigned char x_th = 6;		// 0--7.5
+	char z_th = 6;				// -8--7
+
+	// 0x34 YZ_TH_SEL[7:5]	Y_TH[4:0], default 0x9d  (YZ_TH_SEL   4   9.0 m/s2 | Y_TH  -3  -3 m/s2)
+	//qmaX981_write_reg(0x34, 0x9d);	//|yz|>8 m/s2, y>-3 m/m2
+	if((y_th&0x80))
+	{
+		reg_0x34 |= yz_th_sel<<5;
+		reg_0x34 |= (y_th&0x0f)|0x10;
+		gsensor_i2c_write_byte(0x34, reg_0x34);
+	}
+	else
+	{	
+		reg_0x34 |= yz_th_sel<<5;
+		reg_0x34 |= y_th;
+		gsensor_i2c_write_byte(0x34, reg_0x34);	//|yz|>8m/s2, y<3 m/m2
+	}
+	//Z_TH<7:4>: -8~7, LSB 1 (unit : m/s2)	X_TH<3:0>: 0~7.5, LSB 0.5 (unit : m/s2) 
+	//qmaX981_write_reg(0x1e, 0x68);	//6 m/s2, 4 m/m2
+
+	gsensor_i2c_write_byte(0x2a, (0x1e|(0x03<<6)));			// 15m/s2
+	gsensor_i2c_write_byte(0x2b, (0x7c|(0x03>>2)));			// 0.5m/s2
+
+#if defined(QMA7981_SWAP_XY)	// swap xy
+	gsensor_i2c_read_bytes(0x42, &reg_0x42, 1);
+	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
+	gsensor_i2c_write_byte(0x42, reg_0x42);
+#endif
+	//qmaX981_read_reg(0x1e, &reg_0x1e, 1);
+	if((z_th&0x80))
+	{
+		reg_0x1e |= (x_th&0x0f);
+		reg_0x1e |= ((z_th<<4)|0x80);
+		gsensor_i2c_write_byte(0x1e, reg_0x1e);
+	}
+	else
+	{
+		reg_0x1e |= (x_th&0x0f);
+		reg_0x1e |= (z_th<<4);
+		gsensor_i2c_write_byte(0x1e, reg_0x1e);
+	}
+}
+#endif
 
 static kal_bool qma7981_custom_init(void)
 {
@@ -944,9 +997,6 @@ static kal_bool qma7981_custom_init(void)
 	unsigned char reg_0x1a = 0;
 #if defined(QMA7981_ANY_MOTION)||defined(QMA7981_NO_MOTION)
 	unsigned char reg_0x2c = 0;
-#endif
-#if defined(QMA7981_HAND_UP_DOWN)
-	unsigned char reg_0x42 = 0;
 #endif
 
 	gsensor_i2c_write_byte(0x36, 0xb6);
@@ -1045,10 +1095,10 @@ static kal_bool qma7981_custom_init(void)
 	gsensor_i2c_write_byte(0x1a, reg_0x1a);
 	gsensor_i2c_write_byte(0x2c, reg_0x2c);
 	//gsensor_i2c_write_byte(0x2e, 0x18);		// 0.488*16*20 = 156mg
-	//gsensor_i2c_write_byte(0x2e, 0xc0);		// 0.488*16*128 = 1.5g
+	//gsensor_i2c_write_byte(0x2e, 0xc0);		// 0.488*16*192 = 1.5g
 	//gsensor_i2c_write_byte(0x2e, 0x80);		// 0.488*16*128 = 1g
-	//gsensor_i2c_write_byte(0x2e, 0x60);		// 0.488*16*128 = 750mg
-	gsensor_i2c_write_byte(0x2e, 0x40);		// 0.488*16*128 = 500mg
+	//gsensor_i2c_write_byte(0x2e, 0x60);		// 0.488*16*96 = 750mg
+	gsensor_i2c_write_byte(0x2e, 0x40);		// 0.488*16*64 = 500mg
 #if defined(QMA7981_SIGNIFICANT_MOTION)
 	//gsensor_i2c_write_byte(0x2f, 0x0c|0x01);
 	gsensor_i2c_write_byte(0x2f, 0x01);
@@ -1069,6 +1119,8 @@ static kal_bool qma7981_custom_init(void)
 #endif
 
 #if defined(QMA7981_HAND_UP_DOWN)
+	qma7981_set_hand_up_down();
+
 	reg_0x16 |= 0x02;
 	reg_0x19 |= 0x02;
 			
@@ -1080,11 +1132,6 @@ static kal_bool qma7981_custom_init(void)
 	gsensor_i2c_write_byte(0x16, reg_0x16);
 	gsensor_i2c_write_byte(0x19, reg_0x19);
 	// hand down	
-	gsensor_i2c_read_bytes(0x42, &reg_0x42, 1);
-#if 1	// swap xy
-	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
-	gsensor_i2c_write_byte(0x42, reg_0x42);
-#endif
 #endif
 
 #if defined(QMA7981_DATA_READY)
@@ -1201,7 +1248,9 @@ kal_bool qmaX981_query_gesture(kal_uint16 ms_gest_type)
 		case MS_TAP:
 			return KAL_FALSE;	
 		case MS_STEP:
-			bResult = qmaX981_custom_get_step(&&g_qmaX981.step);
+#if defined(QMAX981_STEPCOUNTER)
+			bResult = qmaX981_custom_get_step(&g_qmaX981.step);
+#endif
 			return bResult;
 		case MS_DROP:
 			return KAL_FALSE;
@@ -1336,7 +1385,10 @@ void qmax981_do_cali(void)
 	data_avg[1] = 0;
 	data_avg[2] = 0;
 
-	qmax981_calied_flag = 0;
+	qmax981_calied_flag = 0;	
+	qmax981_cali[0] = 0;
+	qmax981_cali[1] = 0;
+	qmax981_cali[2] = 0;
 	for(icount=0; icount<QMAX981_CALI_NUM; icount++)
 	{
 		qmaX981_get_raw_data(data);

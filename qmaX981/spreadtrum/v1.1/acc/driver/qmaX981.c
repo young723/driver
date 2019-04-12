@@ -614,6 +614,59 @@ static int qma6981_initialize(struct qmaX981_data *qmaX981)
 	return rc;
 }
 
+#if defined(QMA7981_HAND_UP_DOWN)
+void qma7981_set_hand_up_down(void)
+{
+#if defined(QMA7981_SWAP_XY)
+	unsigned char reg_0x42 = 0;
+#endif
+	unsigned char reg_0x1e = 0;
+	unsigned char reg_0x34 = 0;
+	unsigned char yz_th_sel = 4;
+	char y_th = 2;				// -16 ~ 15
+	unsigned char x_th = 6;		// 0--7.5
+	char z_th = 6;				// -8--7
+
+	// 0x34 YZ_TH_SEL[7:5]	Y_TH[4:0], default 0x9d  (YZ_TH_SEL   4   9.0 m/s2 | Y_TH  -3  -3 m/s2)
+	//qmaX981_write_reg(0x34, 0x9d);	//|yz|>8 m/s2, y>-3 m/m2
+	if((y_th&0x80))
+	{
+		reg_0x34 |= yz_th_sel<<5;
+		reg_0x34 |= (y_th&0x0f)|0x10;
+		qmaX981_write_reg(0x34, reg_0x34);
+	}
+	else
+	{	
+		reg_0x34 |= yz_th_sel<<5;
+		reg_0x34 |= y_th;
+		qmaX981_write_reg(0x34, reg_0x34);	//|yz|>8m/s2, y<3 m/m2
+	}
+	//Z_TH<7:4>: -8~7, LSB 1 (unit : m/s2)	X_TH<3:0>: 0~7.5, LSB 0.5 (unit : m/s2) 
+	//qmaX981_write_reg(0x1e, 0x68);	//6 m/s2, 4 m/m2
+
+	qmaX981_write_reg(0x2a, (0x1e|(0x03<<6)));			// 15m/s2
+	qmaX981_write_reg(0x2b, (0x7c|(0x03>>2)));
+
+#if defined(QMA7981_SWAP_XY)	// swap xy
+	qmaX981_smbus_read_byte(g_qmaX981->client, 0x42, &reg_0x42);
+	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
+	qmaX981_write_reg(0x42, reg_0x42);
+#endif
+	//qmaX981_read_reg(0x1e, &reg_0x1e, 1);
+	if((z_th&0x80))
+	{
+		reg_0x1e |= (x_th&0x0f);
+		reg_0x1e |= ((z_th<<4)|0x80);
+		qmaX981_write_reg(0x1e, reg_0x1e);
+	}
+	else
+	{
+		reg_0x1e |= (x_th&0x0f);
+		reg_0x1e |= (z_th<<4);
+		qmaX981_write_reg(0x1e, reg_0x1e);
+	}
+}
+#endif
 
 static int qma7981_initialize(void)
 {
@@ -626,9 +679,6 @@ static int qma7981_initialize(void)
 	unsigned char reg_0x1a = 0;
 #if defined(QMA7981_ANY_MOTION)||defined(QMA7981_NO_MOTION)
 	unsigned char reg_0x2c = 0;
-#endif
-#if defined(QMA7981_HAND_UP_DOWN)
-	//unsigned char reg_0x42 = 0;
 #endif
 
 	qmaX981_write_reg(0x36, 0xb6);
@@ -670,10 +720,10 @@ static int qma7981_initialize(void)
 	else if(reg_0x10 == 0xe1)
 	{
 		// ODR: 130hz 7.74 ms
-		qmaX981_write_reg(0x12, 0x94);
+		qmaX981_write_reg(0x12, 0x90);		// old x094
 		qmaX981_write_reg(0x13, 0x80);		// clear step
 		qmaX981_write_reg(0x13, 0x7f);		// 0x00
-		qmaX981_write_reg(0x14, 0x24);		// STEP_TIME_LOW<7:0>*(1/ODR) 
+		qmaX981_write_reg(0x14, 0x20);		// 0x24 STEP_TIME_LOW<7:0>*(1/ODR) 
 		qmaX981_write_reg(0x15, 0x20);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
 	}
 	else if(reg_0x10 == 0xe2)
@@ -747,24 +797,19 @@ static int qma7981_initialize(void)
 #endif
 
 #if defined(QMA7981_HAND_UP_DOWN)
+	qma7981_set_hand_up_down();
+	// hand up
 	reg_0x16 |= 0x02;
 	reg_0x19 |= 0x02;
-			
 	qmaX981_write_reg(0x16, reg_0x16);
 	qmaX981_write_reg(0x19, reg_0x19);
+	// hand down
 	// hand down
 	reg_0x16 |= 0x04;
 	reg_0x19 |= 0x04;
 	qmaX981_write_reg(0x16, reg_0x16);
 	qmaX981_write_reg(0x19, reg_0x19);
 	// hand down	
-#if 0	// swap xy
-	//read_reg(0x42, &reg_0x42, 1);
-	reg_0x42 = 0x42;
-	qmaX981_RxData(&reg_0x42, 1);
-	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
-	qmaX981_write_reg(0x42, reg_0x42);
-#endif
 #endif
 
 #if defined(QMA7981_DATA_READY)
@@ -1025,7 +1070,7 @@ static void QMA6981_eint_work(struct work_struct *work)
 		GSE_LOG("qma6981**step_int_end  stepcounter_pre_end = %d , stepcounter_next_end = %d stepcounter_next_start = %d,step_count_index.step_diff =%d\n",	step_count_index.stepcounter_pre_end ,step_count_index.stepcounter_next_end,step_count_index.stepcounter_next_start,step_count_index.step_diff );
 		//res = request_irq(qmaX981->irq, QMA6981_eint_handler, IRQF_TRIGGER_RISING, "gsensor-eint", NULL);
 		//irq_set_irq_type(qmaX981->irq,IRQF_TRIGGER_HIGH);
-		irq_set_irq_type(qmaX981->irq,IRQF_TRIGGER_RISING);				// |IRQF_NO_SUSPEND
+		irq_set_irq_type(qmaX981->irq,IRQF_TRIGGER_RISING|IRQF_NO_SUSPEND);				// |IRQF_NO_SUSPEND
 		GSE_LOG("qma6981**step_int_end\n" );
 	}
 	else
@@ -1052,7 +1097,7 @@ static void QMA6981_eint_work(struct work_struct *work)
 		}
 		GSE_LOG("qma6981**start  stepcounter_pre_end = %d , stepcounter_next_end = %d stepcounter_next_start = %d,step_count_index.step_diff =%d\n",	step_count_index.stepcounter_pre_end ,step_count_index.stepcounter_next_end,step_count_index.stepcounter_next_start,step_count_index.step_diff );
 		//irq_set_irq_type(qmaX981->irq,IRQF_TRIGGER_LOW);
-		irq_set_irq_type(qmaX981->irq,IRQF_TRIGGER_FALLING);	//|IRQF_NO_SUSPEND
+		irq_set_irq_type(qmaX981->irq,IRQF_TRIGGER_FALLING|IRQF_NO_SUSPEND);	//|IRQF_NO_SUSPEND
 		GSE_LOG("step_int_start\n" );
 	}
 	
@@ -1818,9 +1863,8 @@ static ssize_t show_chipinfo_value(struct device *dev,
 		return sprintf(buf, "unknow!\n");
 }
 
-static ssize_t show_waferid_value(struct device *dev,
-		struct device_attribute *attr, char *buf){
-			
+static ssize_t show_waferid_value(struct device *dev,struct device_attribute *attr, char *buf)
+{
 	int res;
 	
 	unsigned int chipid=0;
@@ -1831,32 +1875,33 @@ static ssize_t show_waferid_value(struct device *dev,
 	unsigned char waferid1=0;
 	unsigned char waferid2=0;
 	unsigned char waferid3=0;
-	
-	struct qmaX981_data *qmaX981 = i2c_get_clientdata(this_client);
-	
-	res = qmaX981_smbus_read_byte(qmaX981->client, 0x48, &chipidh);
 
-	res = qmaX981_smbus_read_byte(qmaX981->client, 0x47, &chipidl);
-	chipidl = 0x47;
-
-	GSE_LOG("read wafer chip H:0x%x L:0x%x", chipidh, chipidl);
-	chipid = (chipidh<<8)|chipidl;
-
-	res = qmaX981_smbus_read_byte(qmaX981->client, 0x59, &waferid1);	
-	
-	res = qmaX981_smbus_read_byte(qmaX981->client, 0x41, &waferid2);
-
-	res = qmaX981_smbus_read_byte(qmaX981->client, 0x40, &waferid3);	
-
-	GSE_LOG("wafer ID: 0x%x 0x%x 0x%x\n", waferid1, waferid2, waferid3);
-	
-	waferid = (waferid1&0x10)|((waferid2>>4)&0x0c)|((waferid3>>6)&0x03);
+	if(g_qmaX981->chip_type == CHIP_TYPE_QMA6981)
+	{
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, 0x48, &chipidh);
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, 0x47, &chipidl);
+		GSE_LOG("read wafer chip H:0x%x L:0x%x", chipidh, chipidl);
+		chipid = (chipidh<<8)|chipidl;
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, 0x59, &waferid1);
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, 0x41, &waferid2);
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, 0x40, &waferid3);
+		GSE_LOG("wafer ID: 0x%x 0x%x 0x%x\n", waferid1, waferid2, waferid3);
+		waferid = (waferid1&0x10)|((waferid2>>4)&0x0c)|((waferid3>>6)&0x03);
+	}
+	else if((g_qmaX981->chip_type == CHIP_TYPE_QMA7981)||(g_qmaX981->chip_type == CHIP_TYPE_QMA6100))
+	{
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, 0x48, &chipidh);
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, 0x47, &chipidl);
+		GSE_LOG("read wafer chip H:0x%x L:0x%x", chipidh, chipidl);
+		chipid = (chipidh<<8)|chipidl;
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, 0x5a, &waferid1);
+		waferid = waferid1&0x1f;
+	}
 
 	return sprintf(buf, " Chip id:0x%x \n Wafer ID 0x%02x\n", chipid, waferid);			
 }
 
-static ssize_t show_sensordata_value(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t show_sensordata_value(struct device *dev,struct device_attribute *attr, char *buf)
 {
 	struct qmaX981_acc acc;
 	
@@ -1865,8 +1910,7 @@ static ssize_t show_sensordata_value(struct device *dev,
 	return sprintf(buf, "(%d %d %d)\n",acc.x,acc.y,acc.z);
 }
 		
-static ssize_t show_dumpallreg_value(struct device *dev,
-		struct device_attribute *attr, char *buf)
+static ssize_t show_dumpallreg_value(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int res;
 	int i =0;
@@ -1877,7 +1921,7 @@ static ssize_t show_dumpallreg_value(struct device *dev,
 
 	GSE_FUN();
 	/* Check status register for data availability */
-	for(i =0;i<=50;i++)
+	for(i=0;i<=50;i++)
 	{
 		databuf[0] = i;
 		res = qmaX981_smbus_read_byte(g_qmaX981->client, databuf[0], &databuf[1]);
@@ -1890,6 +1934,34 @@ static ssize_t show_dumpallreg_value(struct device *dev,
 
 	return scnprintf(buf, sizeof(strbuf), "%s\n", strbuf);
 }
+
+static ssize_t show_dumpallreg2_value(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int res;
+	int i =0;
+	char strbuf[600];
+	char tempstrbuf[24];
+	unsigned char databuf[2]={0};
+	int length, len;
+
+	length = 0;
+	GSE_FUN();
+	/* Check status register for data availability */
+	for(i=51;i<=100;i++)
+	{
+		databuf[0] = i;
+		res = qmaX981_smbus_read_byte(g_qmaX981->client, databuf[0], &databuf[1]);
+		if(res < 0)
+			GSE_LOG("qma6981 dump registers 0x%02x failed !\n", i);
+
+		len = scnprintf(tempstrbuf, sizeof(tempstrbuf), "0x%2x=0x%2x\n",i, databuf[1]);
+		snprintf(strbuf+length, sizeof(strbuf)-length, "%s",tempstrbuf);
+		length += len;
+	}
+
+	return scnprintf(buf, sizeof(strbuf), "%s\n", strbuf);
+}
+
 
 /*----------------------------------------------------------------------------*/
 static ssize_t show_layout_value(struct device *dev,
@@ -2204,6 +2276,7 @@ static DEVICE_ATTR(chipinfo,		QMAX981_ATTR_R, show_chipinfo_value, NULL);
 static DEVICE_ATTR(waferid,		QMAX981_ATTR_R, show_waferid_value, NULL);
 static DEVICE_ATTR(sensordata,	QMAX981_ATTR_R, show_sensordata_value,    NULL);
 static DEVICE_ATTR(dumpallreg,	QMAX981_ATTR_R, show_dumpallreg_value, NULL);
+static DEVICE_ATTR(dumpallreg2,	QMAX981_ATTR_R, show_dumpallreg2_value, NULL);
 static DEVICE_ATTR(layout,		QMAX981_ATTR_WR, show_layout_value, store_layout_value);
 static DEVICE_ATTR(enable_acc,	QMAX981_ATTR_WR, qmaX981_enable_show , qmaX981_enable_store);
 static DEVICE_ATTR(delay_acc,		QMAX981_ATTR_WR, qmaX981_delay_show , qmaX981_delay_store);
@@ -2230,6 +2303,7 @@ static struct attribute *qmaX981_attributes[] = {
 	&dev_attr_waferid.attr,
 	&dev_attr_sensordata.attr,
 	&dev_attr_dumpallreg.attr,
+	&dev_attr_dumpallreg2.attr,
 	&dev_attr_layout.attr,
 	&dev_attr_enable_acc.attr,
 	&dev_attr_delay_acc.attr,

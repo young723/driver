@@ -77,11 +77,18 @@
 	Motion sensor controller register macro define
 *******************************************************/
 //#define QMAX981_HAND_LIGHT
-#define QMAX981_STEP_COUNTER
+#define QMAX981_STEPCOUNTER
+//#define QMA7981_HAND_UP_DOWN
+//#define QMA7981_ANY_MOTION
+//#define QMA7981_SIGNIFICANT_MOTION
+//#define QMA7981_NO_MOTION
+//#define QMA7981_HAND_UP_DOWN
+//#define QMA7981_INT_LATCH
+
 //#define QMAX981_USE_INT1
-#if defined(QMAX981_STEP_COUNTER)
-#define QMAX981_USE_INT1
-#define QMAX981_STEP_COUNTER_USE_INT
+
+#if defined(QMAX981_STEPCOUNTER)
+//#define QMAX981_STEP_COUNTER_USE_INT		// for qma6981
 #define QMAX981_CHECK_ABNORMAL_DATA
 #endif
 
@@ -94,7 +101,7 @@
 #define QMAX981_RANGE_16G       (1<<3)
 #define QMAX981_RANGE_32G       0x0f
 	
-#if defined(QMAX981_STEP_COUNTER)
+#if defined(QMAX981_STEPCOUNTER)
 #define QMAX981_OFFSET_X		0x60
 #define QMAX981_OFFSET_Y		0x60
 #define QMAX981_OFFSET_Z		0x60
@@ -168,7 +175,7 @@
 //==============================
 // 供上层查询用的+-2G 范围
 //==============================
-#if defined(QMAX981_STEP_COUNTER)
+#if defined(QMAX981_STEPCOUNTER)
 #define ACC_0G_X      2048
 #define ACC_1G_X      (2048+64)
 #define ACC_MINUS1G_X (2048-64)

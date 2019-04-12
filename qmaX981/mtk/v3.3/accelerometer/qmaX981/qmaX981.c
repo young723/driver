@@ -1260,49 +1260,68 @@ static ssize_t show_waferid_value(struct device_driver *ddri, char *buf)
 	unsigned char waferid2;
 	unsigned char waferid3;
 
-	
-	chipidh = 0x48;
-	if((res = qmaX981_RxData(&chipidh, 1)))
+	if(qmaX981->chip_type == CHIP_TYPE_QMA6981)
 	{
-		QMAX981_LOG("read wafer chip h error!!!\n");
-		return -EFAULT;
+		chipidh = 0x48;
+		if((res = qmaX981_RxData(&chipidh, 1)))
+		{
+			QMAX981_LOG("read wafer chip h error!!!\n");
+			return -EFAULT;
+		}
+		chipidl = 0x47;
+		if((res = qmaX981_RxData(&chipidl, 1)))
+		{
+			QMAX981_LOG("read wafer chip l error!!!\n");
+			return -EFAULT;
+		}
+		QMAX981_LOG("read wafer chip H:0x%x L:0x%x", chipidh, chipidl);
+		chipid = (chipidh<<8)|chipidl;
+		
+		waferid1 = 0x59;
+		if((res = qmaX981_RxData(&waferid1, 1)))
+		{
+			QMAX981_LOG("read wafer id 1 error!!!\n");
+			return -EFAULT;
+		}
+		waferid2 = 0x41;
+		if((res = qmaX981_RxData(&waferid2, 1)))
+		{
+			QMAX981_LOG("read wafer id 2 error!!!\n");
+			return -EFAULT;
+		}
+		waferid3 = 0x40;
+		if((res = qmaX981_RxData(&waferid3, 1)))
+		{
+			QMAX981_LOG("read wafer id 3 error!!!\n");
+			return -EFAULT;
+		}
+		QMAX981_LOG("wafer ID: 0x%x 0x%x 0x%x\n", waferid1, waferid2, waferid3);
+		waferid = (waferid1&0x10)|((waferid2>>4)&0x0c)|((waferid3>>6)&0x03);
 	}
-	chipidl = 0x47;
-	if((res = qmaX981_RxData(&chipidl, 1)))
+	else if(qmaX981->chip_type == CHIP_TYPE_QMA7981)
 	{
-		QMAX981_LOG("read wafer chip l error!!!\n");
-		return -EFAULT;
+		chipidh = 0x48;
+		if((res = qmaX981_RxData(&chipidh, 1)))
+		{
+			QMAX981_LOG("read wafer chip h error!!!\n");
+			return -EFAULT;
+		}
+		chipidl = 0x47;
+		if((res = qmaX981_RxData(&chipidl, 1)))
+		{
+			QMAX981_LOG("read wafer chip l error!!!\n");
+			return -EFAULT;
+		}
+		QMAX981_LOG("read wafer chip H:0x%x L:0x%x", chipidh, chipidl);
+		chipid = (chipidh<<8)|chipidl;
+
+		waferid = 0x5a;
+		res = qmaX981_RxData(&waferid, 1);
+		waferid = waferid&0x1f;
 	}
-	QMAX981_LOG("read wafer chip H:0x%x L:0x%x", chipidh, chipidl);
-	chipid = (chipidh<<8)|chipidl;
-	
-	waferid1 = 0x59;
-	if((res = qmaX981_RxData(&waferid1, 1)))
-	{
-		QMAX981_LOG("read wafer id 1 error!!!\n");
-		return -EFAULT;
-	}
-	waferid2 = 0x41;
-	if((res = qmaX981_RxData(&waferid2, 1)))
-	{
-		QMAX981_LOG("read wafer id 2 error!!!\n");
-		return -EFAULT;
-	}
-	waferid3 = 0x40;
-	if((res = qmaX981_RxData(&waferid3, 1)))
-	{
-		QMAX981_LOG("read wafer id 3 error!!!\n");
-		return -EFAULT;
-	}
-	
-	QMAX981_LOG("wafer ID: 0x%x 0x%x 0x%x\n", waferid1, waferid2, waferid3);
-	
-	waferid = (waferid1&0x10)|((waferid2>>4)&0x0c)|((waferid3>>6)&0x03);
 
 	return sprintf(buf, " DieId:0x%x(%d) \n WaferId:0x%02x(%d)\n", chipid,chipid, waferid,waferid);
 }
-
-
 
 static ssize_t show_dumpallreg_value(struct device_driver *ddri, char *buf)
 {
@@ -1704,6 +1723,82 @@ static int qma6981_initialize(void)
    	return 0;
 }
 
+#if defined(QMA7981_HAND_UP_DOWN)
+void qma7981_set_hand_up_down(void)
+{
+	unsigned char reg[2] = {0};
+#if defined(QMA7981_SWAP_XY)
+	unsigned char reg_0x42 = 0;
+#endif
+	unsigned char reg_0x1e = 0;
+	unsigned char reg_0x34 = 0;
+	unsigned char yz_th_sel = 4;
+	char y_th = 2;				// -16 ~ 15
+	unsigned char x_th = 6;		// 0--7.5
+	char z_th = 6;				// -8--7
+
+	// 0x34 YZ_TH_SEL[7:5]	Y_TH[4:0], default 0x9d  (YZ_TH_SEL   4   9.0 m/s2 | Y_TH  -3  -3 m/s2)
+	//qmaX981_write_reg(0x34, 0x9d);	//|yz|>8 m/s2, y>-3 m/m2
+	if((y_th&0x80))
+	{
+		reg_0x34 |= yz_th_sel<<5;
+		reg_0x34 |= (y_th&0x0f)|0x10;
+		reg[0] = 0x34;
+		reg[1] = reg_0x34;
+		qmaX981_TxData(reg, 2);
+	}
+	else
+	{	
+		reg_0x34 |= yz_th_sel<<5;
+		reg_0x34 |= y_th;		
+		reg[0] = 0x34;
+		reg[1] = reg_0x34;
+		qmaX981_TxData(reg, 2);
+	}
+	//Z_TH<7:4>: -8~7, LSB 1 (unit : m/s2)	X_TH<3:0>: 0~7.5, LSB 0.5 (unit : m/s2) 
+	//qmaX981_write_reg(0x1e, 0x68);	//6 m/s2, 4 m/m2
+
+	//gsensor_i2c_write_byte(0x2a, (0x1e|(0x03<<6)));			// 15m/s2
+	reg[0] = 0x2a;
+	reg[1] = (0x1e|(0x03<<6));
+	qmaX981_TxData(reg, 2);
+	//gsensor_i2c_write_byte(0x2b, (0x7c|(0x03>>2)));			// 0.5m/s2
+	reg[0] = 0x2b;
+	reg[1] = (0x7c|(0x03>>2));
+	qmaX981_TxData(reg, 2);
+
+#if defined(QMA7981_SWAP_XY)	// swap xy
+	//gsensor_i2c_read_bytes(0x42, &reg_0x42, 1);
+	reg_0x42 = 0x42;
+	qmaX981_RxData(&reg_0x42, 1);
+	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
+	//gsensor_i2c_write_byte(0x42, reg_0x42);
+	reg[0] = 0x42;
+	reg[1] = reg_0x42;
+	qmaX981_TxData(reg, 2);
+#endif
+	//qmaX981_read_reg(0x1e, &reg_0x1e, 1);
+	if((z_th&0x80))
+	{
+		reg_0x1e |= (x_th&0x0f);
+		reg_0x1e |= ((z_th<<4)|0x80);
+		//gsensor_i2c_write_byte(0x1e, reg_0x1e);		
+		reg[0] = 0x1e;
+		reg[1] = reg_0x1e;
+		qmaX981_TxData(reg, 2);
+	}
+	else
+	{
+		reg_0x1e |= (x_th&0x0f);
+		reg_0x1e |= (z_th<<4);
+		//gsensor_i2c_write_byte(0x1e, reg_0x1e);		
+		reg[0] = 0x1e;
+		reg[1] = reg_0x1e;
+		qmaX981_TxData(reg, 2);
+	}
+}
+#endif
+
 static int qma7981_initialize(void)
 {
 	int ret = 0;
@@ -1716,9 +1811,6 @@ static int qma7981_initialize(void)
 	unsigned char reg_0x1a = 0;
 #if defined(QMA7981_ANY_MOTION)||defined(QMA7981_NO_MOTION)
 	unsigned char reg_0x2c = 0;
-#endif
-#if defined(QMA7981_HAND_UP_DOWN)
-	//unsigned char reg_0x42 = 0;
 #endif
 
 	total = sizeof(qma7981_init_tbl)/sizeof(qma7981_init_tbl[0]);
@@ -1840,6 +1932,8 @@ static int qma7981_initialize(void)
 #endif
 
 #if defined(QMA7981_HAND_UP_DOWN)
+	qma7981_set_hand_up_down();
+
 	reg_0x16 |= 0x02;
 	reg_0x19 |= 0x02;
 			
@@ -1851,13 +1945,6 @@ static int qma7981_initialize(void)
 	qmaX981_write_reg(0x16, reg_0x16);
 	qmaX981_write_reg(0x19, reg_0x19);
 	// hand down	
-	#if 0	// swap xy
-	//read_reg(0x42, &reg_0x42, 1);
-	reg_0x42 = 0x42;
-	qmaX981_RxData(&reg_0x42, 1);
-	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
-	qmaX981_write_reg(0x42, reg_0x42);
-	#endif
 #endif
 
 #if defined(QMA7981_DATA_READY)
