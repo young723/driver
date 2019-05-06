@@ -45,6 +45,7 @@
 #define GSENSOR                         0x85
 #define QMA_ACC_ENABLE					_IOW(GSENSOR, 0x01, char)
 #define QMA_STP_ENABLE					_IOW(GSENSOR, 0x02, char)
+#define QMA_STP_CLEAR					_IOR(GSENSOR, 0x03, char)
 
 struct qmaX981_platform_data {
 	char layout;

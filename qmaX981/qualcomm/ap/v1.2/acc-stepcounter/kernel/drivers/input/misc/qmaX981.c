@@ -504,20 +504,26 @@ static int qmaX981_setreg_odr(unsigned int ms)
 	return ret;
 }
 
-static ssize_t show_qmaX981_hw_value(struct device *dev,struct device_attribute *attr, char *buf)
-{
-	MSE_LOG("qmaX981_hw_status=%d\n", acc_qst->qmaX981_hw_status);
-	return sprintf(buf,"%d\n", acc_qst->qmaX981_hw_status);
-}
-
 #if defined(QMAX981_STEPCOUNTER)
 static int qmaX981_setreg_reset_sc(void)
 {
 	int ret = 0;
 	unsigned char data[2] = {0};
+	unsigned char reg13_value = 0;
+
+	data[0] = 0x13;
+	I2C_RxData(data, 1);
+	reg13_value = data[0];
 
 	data[0] = 0x13;
 	data[1] = 0x80; //clean data
+	ret = I2C_TxData(data,2);
+	if(ret < 0)
+		MSE_ERR("qmaX981_setreg_reset_sc error!, %d\n", ret);
+
+	mdelay(5);
+	data[0] = 0x13;
+	data[1] = reg13_value; //clean data
 	ret = I2C_TxData(data,2);
 	if(ret < 0)
 		MSE_ERR("qmaX981_setreg_reset_sc error!, %d\n", ret);
@@ -566,6 +572,12 @@ static long qmaX981_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 //			MSE_ERR("copy_from_user failed.");
 //			return -EFAULT;
 //		}
+		break;
+	case QMA_STP_CLEAR:
+#if defined(QMAX981_STEPCOUNTER)
+		qmaX981_setreg_reset_sc();
+#endif
+		MSE_LOG("QMA_STP_CLEAR called.");
 		break;
 	default:
 		return -ENOTTY;
@@ -939,12 +951,12 @@ static ssize_t show_dumpallreg_value(struct device *dev,
 	char tempstrbuf[24];
 	unsigned char databuf[2];
 	int length=0;
-
 	char  *strbuf;
+
 	strbuf=(char*)kzalloc(sizeof(char)*1024, GFP_KERNEL);
 	if(NULL != strbuf)
 	{
-		for(i =0;i<64;i  )
+		for(i =0;i<64;i++)
 		{
 			databuf[0] = i;
 			res = I2C_RxData(databuf, 1);
@@ -952,7 +964,7 @@ static ssize_t show_dumpallreg_value(struct device *dev,
 				MSE_LOG("qmaX981 dump registers 0x%02x failed !\n", i);
 
 			length = scnprintf(tempstrbuf, sizeof(tempstrbuf), "reg[0x%2x] = 0x%2x \n",i, databuf[0]);
-			snprintf(strbuf length*i, sizeof(strbuf)-length*i, "%s \n",tempstrbuf);
+			snprintf(strbuf+length*i , 1024-length*i, "%s",tempstrbuf);
 		}
 		res = scnprintf(buf, sizeof(strbuf), "%s\n", strbuf);
 	}
@@ -1260,7 +1272,7 @@ static ssize_t qmaX981_cali_store(struct device *dev,
 		data_avg[0] = 0;
 		data_avg[1] = 0;
 		data_avg[2] = 0;
-		for(icount=0; icount<QMA6981_CALI_NUM; icount  )
+		for(icount=0; icount<QMA6981_CALI_NUM; icount++)
 		{
 			qmaX981_read_raw_xyz(acc_qst, data);
 			data_avg[0] += data[0];
@@ -1321,6 +1333,15 @@ static ssize_t qmaX981_cali_store(struct device *dev,
 #endif
 
 
+static ssize_t qmaX981_sc_clear(struct device *dev,struct device_attribute *attr, char *buf)
+{
+#if defined(QMAX981_STEPCOUNTER)
+	qmaX981_setreg_reset_sc();
+#endif
+	return scnprintf(buf, PAGE_SIZE, "step clear done\n");
+}
+
+		
 DEVICE_ATTR(chipinfo,    S_IRUGO, show_chipinfo_value, NULL);
 DEVICE_ATTR(waferid,    S_IRUGO, show_waferid_value, NULL);
 DEVICE_ATTR(sensordata, S_IWUSR | S_IRUGO, show_sensordata_value,    NULL);
@@ -1328,14 +1349,13 @@ DEVICE_ATTR(dumpallreg,  S_IRUGO , show_dumpallreg_value, NULL);
 DEVICE_ATTR(layout,      S_IRUGO | S_IWUSR, show_layout_value, store_layout_value);
 DEVICE_ATTR(registers_value, S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH, show_registers_value, store_registers_value);
 DEVICE_ATTR(registers_addr,  S_IRUGO | S_IWUSR | S_IWGRP | S_IWOTH, show_registers_addr, store_registers_addr);
-
 DEVICE_ATTR(delay_acc, S_IRUGO | S_IWUSR, qmaX981_delay_show, qmaX981_delay_store);
 DEVICE_ATTR(enable_acc, S_IRUGO | S_IWUSR, qmaX981_enable_show, qmaX981_enable_store);
-DEVICE_ATTR(qmaX981_hw_status, S_IRUGO , show_qmaX981_hw_value, NULL);
-
 #if defined(QMA6981_USE_CALI)
 DEVICE_ATTR(cali, S_IRUGO | S_IWUSR, qmaX981_cali_show, qmaX981_cali_store);
 #endif
+DEVICE_ATTR(sc_clear, S_IRUGO, qmaX981_sc_clear, NULL);
+
 
 static struct attribute *acc_attributes[] = {
 	&dev_attr_chipinfo.attr,
@@ -1347,10 +1367,11 @@ static struct attribute *acc_attributes[] = {
 	&dev_attr_registers_addr.attr,
 	&dev_attr_delay_acc.attr,
 	&dev_attr_enable_acc.attr,
-	&dev_attr_qmaX981_hw_status.attr,
 #if defined(QMA6981_USE_CALI)
 	&dev_attr_cali.attr,
 #endif
+	&dev_attr_sc_clear.attr,
+
 	NULL
 };
 
@@ -2772,7 +2793,7 @@ int qmaX981_probe(struct i2c_client *client, const struct i2c_device_id *id)
 	if(err < 0)
 		goto exit4;
  
-#if defined(QMAX981_STEPCOUNTER)
+#if 0 //defined(QMAX981_STEPCOUNTER)
      /*clear stepcounter vaule*/
      err = qmaX981_setreg_reset_sc();
      if (err < 0)
