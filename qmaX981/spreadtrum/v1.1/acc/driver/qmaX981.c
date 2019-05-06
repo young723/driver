@@ -2433,9 +2433,11 @@ static long qmaX981_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 		
 	case QMAX981_ACC_IOCTL_CLEAR_STEPCOUNT:
 		temp = qmaX981_clear_stepcount((qmaX981->client));
-		data = 0x10;
-		temp = qmaX981_smbus_write_byte(qmaX981->client,0x13,&data);
-		
+		if(g_qmaX981->chip_type == CHIP_TYPE_QMA6981)
+		{
+			data = 0x10;
+			temp = qmaX981_smbus_write_byte(qmaX981->client,0x13,&data);
+		}
 	break;
 #endif
 			

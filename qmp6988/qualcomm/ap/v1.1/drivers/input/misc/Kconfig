@@ -218,16 +218,6 @@ config SENSORS_MPU6050
 	  To compile this driver as a module, choose M here: the
 	  module will be called mpu6050.
 
-config SENSORS_FIS210X
-	tristate "FIS210X 6-axix gyroscope + acceleromater combo"
-	depends on I2C
-	help
-	  Say Y here if you want to support QST FIS210X
-	  connected via an I2C bus.
-
-	  To compile this driver as a module, choose M here: the
-	  module will be called FIS210X.
-
 config SENSORS_LIS3DH
 	tristate "ST LIS3DH 3-axis digital acceleromater"
 	depends on I2C
@@ -726,6 +716,16 @@ config BMP18X_I2C
          To compile this driver as a module, choose M here: the
          module will be called bmp18x-i2c.
 
+config SENSORS_QMP6988
+       tristate "QMP6988 digital pressure sensor"
+       depends on (I2C ) && SYSFS
+       help
+         If you say yes here you get support for QST
+	 digital pressure sensors QMP6988.
+
+         To compile this driver as a module, choose M here: the
+         module will be called qmp6988.
+
 config SENSORS_MMA8X5X
 	tristate "MMA8451/MMA8452/MMA8453/MMA8652/MMA8653 device driver"
 	depends on I2C && SYSFS
@@ -785,16 +785,6 @@ config SENSORS_MMC3X30
 	  To compile this driver as a module, choose M here: the
 	  module will be called mmc3X30.
 
-config INPUT_QMAX981
-tristate "qmaX981 3-axis acceleromater sensor driver"
-depends on I2C
-help
-  Say Y here if you want to enable the qmaX981 acceleromater sensor
-  driver.
-
-  To compile this driver as a module, choose M here: the
-  module will be called qmaX981.
-	  
 config SENSORS_AKM09911
 	tristate "AKM09911 3-axis electronic compass sensor driver"
 	depends on I2C
@@ -804,6 +794,27 @@ config SENSORS_AKM09911
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called akm09911.
+
+config SENSORS_QMA6981
+	tristate "QMA6981 3-axis electronic compass sensor driver"
+	depends on I2C
+	help
+	  Say Y here if you want to enable the qma6981 ecompass sensor
+	  driver.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called qma6981.
+
+config SENSORS_FIS210X
+	tristate "FIS210X 6-axix gyroscope + acceleromater combo"
+	depends on I2C
+	default n
+	help
+	  Say Y here if you want to support InvenSense FIS210X
+	  connected via an I2C bus.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called fis210x.
 
 config SENSORS_AKM8963
 	tristate "AKM8963 3-axis electronic compass sensor driver"
