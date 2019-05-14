@@ -1145,6 +1145,7 @@ int qmaX981_check_abnormal_data(int data_in, int *data_out)
 
 		if((g_qmaX981_data_c.more_data[0]<0)||(g_qmaX981_data_c.more_data[1]<0)||(g_qmaX981_data_c.more_data[2]<0))
 		{
+			*data_out = g_qmaX981_data_c.last_data;//cxg
 			return -1;
 		}
 		
@@ -1167,6 +1168,7 @@ int qmaX981_check_abnormal_data(int data_in, int *data_out)
 	else
 	{
 		g_qmaX981_data_c.last_data = g_qmaX981_data_c.curr_data;
+		*data_out = g_qmaX981_data_c.last_data;//cxg
 	}
 
 	return 0;
@@ -1274,7 +1276,9 @@ static void step_c_work_func(struct work_struct *work){
 			return;
 		}
 	}
+#if defined(QMA6981_CHECK_ABNORMAL_DATA)
 	qmaX981_check_abnormal_data(resut, &resut);
+#endif
 //	GSE_LOG("%s: %d\n",__func__,resut);
 
 #ifdef QMA6981_STEP_COUNTER_USE_INT
@@ -2433,11 +2437,11 @@ static long qmaX981_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 		
 	case QMAX981_ACC_IOCTL_CLEAR_STEPCOUNT:
 		temp = qmaX981_clear_stepcount((qmaX981->client));
-		if(g_qmaX981->chip_type == CHIP_TYPE_QMA6981)
-		{
-			data = 0x10;
-			temp = qmaX981_smbus_write_byte(qmaX981->client,0x13,&data);
-		}
+		//if(g_qmaX981->chip_type == CHIP_TYPE_QMA6981)
+		//{
+		//	data = 0x10;
+		//	temp = qmaX981_smbus_write_byte(qmaX981->client,0x13,&data);
+		//}
 	break;
 #endif
 			
@@ -2603,6 +2607,9 @@ static int qmaX981_i2c_probe(struct i2c_client *client,
 #ifdef QMAX981_STEP_COUNTER
 	INIT_DELAYED_WORK(&qmaX981->sc_work, step_c_work_func);
 	qmaX981->sc_dely = 200;
+	#ifdef QMA6981_CHECK_ABNORMAL_DATA
+    memset(&g_qmaX981_data_c,0,sizeof(qmaX981_data_check));  //cxg
+    #endif
 #endif 
 
 #ifdef QMA6981_STEP_COUNTER_USE_INT
