@@ -2798,6 +2798,6 @@ module_init(qmaX981_i2c_init);
 module_exit(qmaX981_i2c_exit);
 
 MODULE_DESCRIPTION("qmaX981 accelerometer driver");
-MODULE_AUTHOR("QST-inc");
+MODULE_AUTHOR("YZQ QST");
 MODULE_LICENSE("GPL");
 MODULE_VERSION(QMAX981_DEV_VERSION);
