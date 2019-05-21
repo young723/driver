@@ -352,7 +352,7 @@ static int qmaX981_set_mode(struct i2c_client *client, unsigned char mode)
 #ifdef QMAX981_STEP_COUNTER
 	return 0;
 #endif
-	if (mode == QMAX981_MODE_STANDBY)
+	if(mode == QMAX981_MODE_STANDBY)
 	{
 		data = 0x00;
 		rc = qmaX981_smbus_write_byte(client,QMA6981_MODE,&data);
@@ -362,6 +362,13 @@ static int qmaX981_set_mode(struct i2c_client *client, unsigned char mode)
 	{
 		data = 0x80;
 		rc = qmaX981_smbus_write_byte(client,QMA6981_MODE,&data);
+		if((g_qmaX981->chip_type == CHIP_TYPE_QMA7981)||(g_qmaX981->chip_type == CHIP_TYPE_QMA6100))
+		{
+			data = 0x80;
+			rc = qmaX981_smbus_write_byte(client,0x5f,&data);
+			data = 0x00;
+			rc = qmaX981_smbus_write_byte(client,0x5f,&data);
+		}
 		msleep(1);
 	}
 

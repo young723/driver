@@ -457,12 +457,25 @@ static int qmaX981_setreg_power(int en)
 	if(en)
 		data[1] = 0x80;
 	else
-		data[0] = 0x00;
+		data[1] = 0x00;
 	
 	ret = I2C_TxData(data, 2);
 	if(ret)
 	{
 		MSE_ERR("qmaX981_setreg_power error!, %d\n", ret);
+	}
+
+	if(en)
+	{
+		if((acc_qst->chip_type == CHIP_TYPE_QMA7981)||(acc_qst->chip_type == CHIP_TYPE_QMA6100))
+		{
+			data[0] = 0x5f;
+			data[1] = 0x80;
+			ret = I2C_TxData(data, 2);
+			data[0] = 0x5f;
+			data[1] = 0x00;
+			ret = I2C_TxData(data, 2);
+		}
 	}
 	return ret;
 }
