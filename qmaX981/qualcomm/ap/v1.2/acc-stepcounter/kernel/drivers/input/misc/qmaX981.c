@@ -475,6 +475,7 @@ static int qmaX981_setreg_power(int en)
 			data[0] = 0x5f;
 			data[1] = 0x00;
 			ret = I2C_TxData(data, 2);
+			mdelay(20);
 		}
 	}
 	return ret;
@@ -1874,6 +1875,7 @@ static int qma7981_initialize(struct i2c_client *client)
 	qmaX981_write_reg(0x11, 0x80);
 	qmaX981_write_reg(0x5f, 0x80);
 	qmaX981_write_reg(0x5f, 0x00);
+	mdelay(20);
 
 	return 0;
 }
@@ -1905,6 +1907,7 @@ static int qma6100_initialize(struct i2c_client *client)
 	qmaX981_write_reg(0x11, 0x80);
 	qmaX981_write_reg(0x5f, 0x80);
 	qmaX981_write_reg(0x5f, 0x00);
+	mdelay(20);
 
 	return 0;
 }

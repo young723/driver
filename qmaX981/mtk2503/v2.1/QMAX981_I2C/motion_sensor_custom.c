@@ -1012,7 +1012,8 @@ static kal_bool qma7981_custom_init(void)
 //		gsensor_i2c_write_byte(0x4a, 0x08);	//Force I2C I2C interface
 	gsensor_i2c_write_byte(0x11, 0x80);
 	gsensor_i2c_write_byte(0x5f, 0x80);
-	gsensor_i2c_write_byte(0x5f, 0x00);
+	gsensor_i2c_write_byte(0x5f, 0x00);	
+	gsensor_delay_ms(20);
 // read reg
 	gsensor_i2c_read_bytes(0x16, &reg_0x16, 1);
 	gsensor_i2c_read_bytes(0x18, &reg_0x18, 1);

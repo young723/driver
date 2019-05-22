@@ -369,7 +369,7 @@ static int qmaX981_set_mode(struct i2c_client *client, unsigned char mode)
 			data = 0x00;
 			rc = qmaX981_smbus_write_byte(client,0x5f,&data);
 		}
-		msleep(1);
+		msleep(20);
 	}
 
 	return 0;
@@ -833,6 +833,7 @@ static int qma7981_initialize(void)
 	qmaX981_write_reg(0x11, 0x80);
 	qmaX981_write_reg(0x5f, 0x80);
 	qmaX981_write_reg(0x5f, 0x00);
+	mdelay(20);
 
 	return 0;
 }
@@ -864,6 +865,7 @@ static int qma6100_initialize(void)
 	qmaX981_write_reg(0x11, 0x80);
 	qmaX981_write_reg(0x5f, 0x80);
 	qmaX981_write_reg(0x5f, 0x00);
+	mdelay(20);
 
 	return 0;
 }

@@ -246,7 +246,7 @@ const unsigned char qma7981_init_tbl[][2] =
 	{0x5f, 0x80},		// enable test mode,take control the FSM
 	{0x5f, 0x00},		//normal mode
 
-	{QMAX981_DELAY, 1}
+	{QMAX981_DELAY, 20}
 };
 
 
@@ -451,7 +451,8 @@ static int qmaX981_set_mode(unsigned char enable)
 		res = qmaX981_TxData(databuf,2);
 	    databuf[0] = 0x5f;
 	    databuf[1] = 0x00;
-		res = qmaX981_TxData(databuf,2);
+		res = qmaX981_TxData(databuf,2);		
+		mdelay(20);
 	}
 	// yangzhiqiang
 
@@ -1979,7 +1980,7 @@ static int qma6100_initialize(void)
 	qmaX981_write_reg(QMAX981_REG_POWER_CTL, 0x80);
 	qmaX981_write_reg(0x5f, 0x80);
 	qmaX981_write_reg(0x5f, 0x00);
-	mdelay(5);
+	mdelay(20);
 
 	return 0;
 }

@@ -490,6 +490,7 @@ uint8_t qmaX981_init(void)
 		qmaX981_write_reg(0x11, 0x80);
 		qmaX981_write_reg(0x5f, 0x80);
 		qmaX981_write_reg(0x5f, 0x00);
+		delay_ms(20);
 // read reg
 		qmaX981_read_reg(0x16, &reg_0x16, 1);
 		qmaX981_read_reg(0x18, &reg_0x18, 1);
@@ -643,6 +644,7 @@ uint8_t qmaX981_init(void)
 		qmaX981_write_reg(0x11, 0x80);
 		qmaX981_write_reg(0x5f, 0x80);
 		qmaX981_write_reg(0x5f, 0x00);
+		delay_ms(20);
 		qmaX981_write_reg(0x20, 0x05);
 #if defined(QMA7981_6100_FIFO)
 		qmaX981_write_reg(0x31, 0x20);
