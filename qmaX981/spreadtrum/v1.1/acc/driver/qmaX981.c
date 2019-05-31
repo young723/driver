@@ -198,7 +198,9 @@ static void qma6981_read_file(char * filename, char *data, int len);
 static void qma6981_write_file(char * filename, char *data, int len);
 #endif
 
-
+#if defined(QMA7981_HAND_UP_DOWN)
+static int hud_layout = 0;
+#endif
 static struct i2c_client *this_client = NULL;
 
 #define QMAX981_DEV_NAME			"qmax981"
@@ -622,20 +624,48 @@ static int qma6981_initialize(struct qmaX981_data *qmaX981)
 }
 
 #if defined(QMA7981_HAND_UP_DOWN)
-void qma7981_set_hand_up_down(void)
+void qma7981_set_hand_up_down(int layout)
 {
-#if defined(QMA7981_SWAP_XY)
+#if 1//defined(QMA7981_SWAP_XY)
 	unsigned char reg_0x42 = 0;
 #endif
 	unsigned char reg_0x1e = 0;
 	unsigned char reg_0x34 = 0;
 	unsigned char yz_th_sel = 4;
-	char y_th = 2;				// -16 ~ 15
-	unsigned char x_th = 6;		// 0--7.5
+	char y_th = -3; //-2;				// -16 ~ 15
+	unsigned char x_th = 6; 	// 0--7.5
 	char z_th = 6;				// -8--7
 
+#if 1//defined(QMA7981_SWAP_XY)	// swap xy
+	if(layout%2)
+	{
+		//qmaX981_readreg(0x42, &reg_0x42, 1);
+		qmaX981_smbus_read_byte(g_qmaX981->client, 0x42, &reg_0x42);
+		reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
+		qmaX981_write_reg(0x42, reg_0x42);
+	}
+#endif
+
+	if((layout >=0) && (layout<=3))
+	{
+		z_th = 3;
+		if((layout == 2)||(layout == 3))
+			y_th = 3; 
+		else if((layout == 0)||(layout == 1))	
+			y_th = -3;
+	}
+	else if((layout >=4) && (layout<=7))
+	{
+		z_th = -3;
+		
+		if((layout == 6)||(layout == 7))
+			y_th = 3; 
+		else if((layout == 4)||(layout == 5))	
+			y_th = -3;
+	}
+
 	// 0x34 YZ_TH_SEL[7:5]	Y_TH[4:0], default 0x9d  (YZ_TH_SEL   4   9.0 m/s2 | Y_TH  -3  -3 m/s2)
-	//qmaX981_write_reg(0x34, 0x9d);	//|yz|>8 m/s2, y>-3 m/m2
+	//qmaX981_write_reg(0x34, 0x9d); //|yz|>8 m/s2, y>-3 m/m2
 	if((y_th&0x80))
 	{
 		reg_0x34 |= yz_th_sel<<5;
@@ -649,17 +679,14 @@ void qma7981_set_hand_up_down(void)
 		qmaX981_write_reg(0x34, reg_0x34);	//|yz|>8m/s2, y<3 m/m2
 	}
 	//Z_TH<7:4>: -8~7, LSB 1 (unit : m/s2)	X_TH<3:0>: 0~7.5, LSB 0.5 (unit : m/s2) 
-	//qmaX981_write_reg(0x1e, 0x68);	//6 m/s2, 4 m/m2
+	//qmaX981_write_reg(0x1e, 0x68); //6 m/s2, 4 m/m2
 
-	qmaX981_write_reg(0x2a, (0x1e|(0x03<<6)));			// 15m/s2
+	qmaX981_write_reg(0x2a, (0x19|(0x03<<6)));			// 12m/s2 , 0.5m/s2
 	qmaX981_write_reg(0x2b, (0x7c|(0x03>>2)));
+	//qmaX981_write_reg(0x2a, (0x19|(0x02<<6))); 		// 12m/s2 , 0.5m/s2
+	//qmaX981_write_reg(0x2b, (0x7c|(0x02)));
 
-#if defined(QMA7981_SWAP_XY)	// swap xy
-	qmaX981_smbus_read_byte(g_qmaX981->client, 0x42, &reg_0x42);
-	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
-	qmaX981_write_reg(0x42, reg_0x42);
-#endif
-	//qmaX981_read_reg(0x1e, &reg_0x1e, 1);
+	//qmaX981_readreg(0x1e, &reg_0x1e, 1);
 	if((z_th&0x80))
 	{
 		reg_0x1e |= (x_th&0x0f);
@@ -675,11 +702,18 @@ void qma7981_set_hand_up_down(void)
 }
 #endif
 
+#define STEP_W_TIME_L	300
+#define STEP_W_TIME_H	250
 static int qma7981_initialize(void)
 {
 	//int ret = 0;
 	unsigned char reg_0x0f = 0;
 	unsigned char reg_0x10 = 0;
+	unsigned char reg_0x11 = 0;
+#if defined(QMAX981_STEP_COUNTER)
+	unsigned char reg_0x14 = 0;
+	unsigned char reg_0x15 = 0;
+#endif
 	unsigned char reg_0x16 = 0;
 	unsigned char reg_0x18 = 0;
 	unsigned char reg_0x19 = 0;
@@ -691,7 +725,7 @@ static int qma7981_initialize(void)
 	qmaX981_write_reg(0x36, 0xb6);
 	mdelay(5);
 	qmaX981_write_reg(0x36, 0x00);
-	qmaX981_write_reg(0x11, 0x80);
+	//qmaX981_write_reg(0x11, 0x80);
 
 	reg_0x0f = QMAX981_RANGE_4G;
 	qmaX981_write_reg(0x0f, reg_0x0f);	
@@ -708,6 +742,8 @@ static int qma7981_initialize(void)
 
 	reg_0x10 = 0xe1;
 	qmaX981_write_reg(0x10, reg_0x10);
+	reg_0x11 = 0x80;
+	qmaX981_write_reg(0x11, reg_0x11);
 
 	qmaX981_smbus_read_byte(g_qmaX981->client, 0x16, &reg_0x16);
 	qmaX981_smbus_read_byte(g_qmaX981->client, 0x18, &reg_0x18);
@@ -715,34 +751,96 @@ static int qma7981_initialize(void)
 	qmaX981_smbus_read_byte(g_qmaX981->client, 0x1a, &reg_0x1a);
 
 #if defined(QMAX981_STEP_COUNTER)
-	if(reg_0x10 == 0xe0)
+	reg_0x11 = 0x80;
+	reg_0x10 = 0xe1;
+
+	if(reg_0x11 == 0x80)		// 500K
 	{
-		// ODR: 65hz 15.48 ms
-		qmaX981_write_reg(0x12, 0x94);
-		qmaX981_write_reg(0x13, 0x80);		// clear step
-		qmaX981_write_reg(0x13, 0x7f);		// 0x00
-		qmaX981_write_reg(0x14, 0x12);		// STEP_TIME_LOW<7:0>*(1/ODR) 
-		qmaX981_write_reg(0x15, 0x10);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+		reg_0x14 = (((STEP_W_TIME_L*100)/771)+1);		// 0xe1 odr 129.7hz, 7.71ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/771)+1);
+		if(reg_0x10 == 0xe0)		// odr 65hz
+		{
+			reg_0x14 = (reg_0x14>>1);
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe1)
+		{
+		}
+		else if(reg_0x10 == 0xe5)	// odr 32.5hz
+		{
+			reg_0x14 = (reg_0x14>>2);
+			reg_0x15 = (reg_0x15>>2);
+		}
 	}
-	else if(reg_0x10 == 0xe1)
+	else if(reg_0x11 == 0x81)	// 333K
+	{		
+		reg_0x14 = (((STEP_W_TIME_L*100)/581)+1);	// 0xe2 odr 172.0930233 hz, 5.81ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/581)+1);
+		if(reg_0x10 == 0xe2)
+		{
+		}
+		else if(reg_0x10 == 0xe1)	// 86.38132296 hz
+		{			
+			reg_0x14 = (reg_0x14>>1);
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe0)		// 43.2748538
+		{
+			reg_0x14 = (reg_0x14>>2);
+			reg_0x15 = (reg_0x15>>2);
+		}
+	}
+	else if(reg_0x11 == 0x82)		// 200K
 	{
-		// ODR: 130hz 7.74 ms
-		qmaX981_write_reg(0x12, 0x90);		// old x094
-		qmaX981_write_reg(0x13, 0x80);		// clear step
-		qmaX981_write_reg(0x13, 0x7f);		// 0x00
-		qmaX981_write_reg(0x14, 0x20);		// 0x24 STEP_TIME_LOW<7:0>*(1/ODR) 
-		qmaX981_write_reg(0x15, 0x20);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
-	}
-	else if(reg_0x10 == 0xe2)
+		reg_0x14 = (((STEP_W_TIME_L*100)/967)+1);	// 0xe2 103.3591731 hz, 9.675 ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/967)+1);
+		if(reg_0x10 == 0xe1)
+		{			
+			reg_0x14 = (reg_0x14>>1);		// 51.88067445 hz
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe2)
+		{
+		}
+		else if(reg_0x10 == 0xe3)
+		{				
+			reg_0x14 = (reg_0x14<<1);		// 205.1282051 hz				
+			reg_0x15 = (reg_0x15<<1);
+		}
+	}		
+	else if(reg_0x11 == 0x83)		// 100K
 	{
-		// ODR: 258Hz 3.87 ms
-		qmaX981_write_reg(0x12, 0x94);
-		qmaX981_write_reg(0x13, 0x80);		// clear step
-		qmaX981_write_reg(0x13, 0x7f);		// 0x00
-		qmaX981_write_reg(0x14, 0x48);		// STEP_TIME_LOW<7:0>*(1/ODR) 
-		qmaX981_write_reg(0x15, 0x40);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+		reg_0x14 = (((STEP_W_TIME_L*100)/975)+1);	// 0xe3 102.5641026 hz, 9.75 ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/975)+1);
+		if(reg_0x10 == 0xe3)
+		{
+		}
+		else if(reg_0x10 == 0xe2)
+		{
+			reg_0x14 = (reg_0x14>>1);		// 51.67958656 hz
+			reg_0x15 = (reg_0x15>>1);
+		}
 	}
-	
+	GSE_LOG("0x14[%d] 0x15[%d] \n", reg_0x14, reg_0x15);
+	qmaX981_write_reg(0x10, reg_0x10);
+	qmaX981_write_reg(0x11, reg_0x11);
+	qmaX981_write_reg(0x12, 0x94);
+	qmaX981_write_reg(0x12, 0x94);
+	qmaX981_write_reg(0x13, 0x80);		// clear step
+	qmaX981_write_reg(0x13, 0x7f);		// 0x7f(1/16) 0x00(1/8)
+	qmaX981_write_reg(0x14, reg_0x14);		// STEP_TIME_LOW<7:0>*(1/ODR) 
+	qmaX981_write_reg(0x15, reg_0x15);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+
+	//qmaX981_write_reg(0x1f, 0x09);		// 0 step
+	//qmaX981_write_reg(0x1f, 0x29);		// 4 step
+	//qmaX981_write_reg(0x1f, 0x49);		// 8 step
+	//qmaX981_write_reg(0x1f, 0x69);		// 12 step
+	//qmaX981_write_reg(0x1f, 0x89);		// 16 step
+	qmaX981_write_reg(0x1f, 0xa9);		// 24 step
+	//qmaX981_write_reg(0x1f, 0xc9);		// 32 step
+	//qmaX981_write_reg(0x1f, 0xe9);		// 40 step
+
+	// step int
 #if defined(QMA7981_STEP_INT)
 	reg_0x16 |= 0x08;
 	reg_0x19 |= 0x08;
@@ -756,6 +854,7 @@ static int qma7981_initialize(void)
 	qmaX981_write_reg(0x16, reg_0x16);
 	qmaX981_write_reg(0x19, reg_0x19);
 #endif
+
 #endif
 
 //RANGE<3:0> Acceleration range Resolution
@@ -804,7 +903,7 @@ static int qma7981_initialize(void)
 #endif
 
 #if defined(QMA7981_HAND_UP_DOWN)
-	qma7981_set_hand_up_down();
+	qma7981_set_hand_up_down(hud_layout);
 	// hand up
 	reg_0x16 |= 0x02;
 	reg_0x19 |= 0x02;
@@ -830,7 +929,7 @@ static int qma7981_initialize(void)
 	qmaX981_write_reg(0x21, 0x1f);	// default 0x1c, step latch mode
 #endif
 
-	qmaX981_write_reg(0x11, 0x80);
+//	qmaX981_write_reg(0x11, 0x80);
 	qmaX981_write_reg(0x5f, 0x80);
 	qmaX981_write_reg(0x5f, 0x00);
 	mdelay(20);
@@ -2269,6 +2368,36 @@ static ssize_t qma6981_cali_store(struct device *dev,
 }
 #endif
 
+#if defined(QMA7981_HAND_UP_DOWN)
+static ssize_t show_hud_layout(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	GSE_FUN();
+
+	return sprintf(buf, "%d\n",hud_layout);
+}
+
+static ssize_t store_hud_layout(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int position = 0;
+
+	GSE_FUN();
+
+	if(1 == sscanf(buf, "%d", &position))
+	{
+		if ((position >= 0) && (position <= 7))
+		{
+			hud_layout = position;
+			qma7981_initialize();
+		}
+	}
+	else
+	{
+		GSE_ERR("invalid format = '%s'\n", buf);
+	}
+
+	return count;
+}
+#endif
 
 /*----------------------------------------------------------------------------*/
 #ifdef QMAX981_STEP_COUNTER
@@ -2297,6 +2426,10 @@ static DEVICE_ATTR(setreg,		QMAX981_ATTR_WR, qmaX981_getreg , qmaX981_setreg);
 #if defined(QMA6981_USE_CALI)
 static DEVICE_ATTR(cali,			QMAX981_ATTR_WR, qma6981_cali_show , qma6981_cali_store);
 #endif
+#if defined(QMA7981_HAND_UP_DOWN)
+static DEVICE_ATTR(hudlayout,			QMAX981_ATTR_WR, show_hud_layout , store_hud_layout);
+#endif
+
 
 static struct attribute *qmaX981_attributes[] = {
 #ifdef QMAX981_STEP_COUNTER
@@ -2324,6 +2457,9 @@ static struct attribute *qmaX981_attributes[] = {
 #if defined(QMA6981_USE_CALI)
 	&dev_attr_cali.attr,
 #endif
+#if defined(QMA7981_HAND_UP_DOWN)
+	&dev_attr_hudlayout.attr,
+#endif
 	NULL
 };
 
@@ -2338,7 +2474,7 @@ static long qmaX981_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 	void __user *argp = (void __user *)arg;
 	struct qmaX981_data *qmaX981 = file->private_data;
 #ifdef QMAX981_STEP_COUNTER
-	unsigned char data;
+	//unsigned char data;
 #endif
 	int temp = 0;
 

@@ -108,7 +108,7 @@ kal_char qma6981_debug_buff[200];
 static struct qmaX981_data g_qmaX981;
 static struct hwmsen_convert g_map;
 
-#define QMAX981_USE_CALI
+//#define QMAX981_USE_CALI
 
 #if defined(QMAX981_USE_CALI)
 #define QMAX981_CALI_FILE		L"Z:\\qmax981cali.conf"
@@ -935,20 +935,47 @@ static kal_bool qma6981_custom_init(void)
 }
 
 #if defined(QMA7981_HAND_UP_DOWN)
-void qma7981_set_hand_up_down(void)
+void qma7981_set_hand_up_down(int layout)
 {
-#if defined(QMA7981_SWAP_XY)
+#if 1//defined(QMA7981_SWAP_XY)
 	unsigned char reg_0x42 = 0;
 #endif
 	unsigned char reg_0x1e = 0;
 	unsigned char reg_0x34 = 0;
 	unsigned char yz_th_sel = 4;
-	char y_th = 2;				// -16 ~ 15
+	char y_th = -3; //-2;				// -16 ~ 15
 	unsigned char x_th = 6;		// 0--7.5
 	char z_th = 6;				// -8--7
 
+#if 1//defined(QMA7981_SWAP_XY)	// swap xy
+	if(layout%2)
+	{
+		gsensor_i2c_read_bytes(0x42, &reg_0x42, 1);
+		reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
+		gsensor_i2c_write_byte(0x42, reg_0x42);
+	}
+#endif
+
+	if((layout >=0) && (layout<=3))
+	{
+		z_th = 3;
+		if((layout == 2)||(layout == 3))
+			y_th = 3; 
+		else if((layout == 0)||(layout == 1))	
+			y_th = -3;
+	}
+	else if((layout >=4) && (layout<=7))
+	{
+		z_th = -3;
+		
+		if((layout == 6)||(layout == 7))
+			y_th = 3; 
+		else if((layout == 4)||(layout == 5))	
+			y_th = -3;
+	}
+
 	// 0x34 YZ_TH_SEL[7:5]	Y_TH[4:0], default 0x9d  (YZ_TH_SEL   4   9.0 m/s2 | Y_TH  -3  -3 m/s2)
-	//qmaX981_write_reg(0x34, 0x9d);	//|yz|>8 m/s2, y>-3 m/m2
+	//gsensor_i2c_write_byte(0x34, 0x9d);	//|yz|>8 m/s2, y>-3 m/m2
 	if((y_th&0x80))
 	{
 		reg_0x34 |= yz_th_sel<<5;
@@ -962,17 +989,14 @@ void qma7981_set_hand_up_down(void)
 		gsensor_i2c_write_byte(0x34, reg_0x34);	//|yz|>8m/s2, y<3 m/m2
 	}
 	//Z_TH<7:4>: -8~7, LSB 1 (unit : m/s2)	X_TH<3:0>: 0~7.5, LSB 0.5 (unit : m/s2) 
-	//qmaX981_write_reg(0x1e, 0x68);	//6 m/s2, 4 m/m2
+	//gsensor_i2c_write_byte(0x1e, 0x68);	//6 m/s2, 4 m/m2
 
-	gsensor_i2c_write_byte(0x2a, (0x1e|(0x03<<6)));			// 15m/s2
-	gsensor_i2c_write_byte(0x2b, (0x7c|(0x03>>2)));			// 0.5m/s2
+	gsensor_i2c_write_byte(0x2a, (0x19|(0x03<<6)));			// 12m/s2 , 0.5m/s2
+	gsensor_i2c_write_byte(0x2b, (0x7c|(0x03>>2)));
+	//gsensor_i2c_write_byte(0x2a, (0x19|(0x02<<6)));			// 12m/s2 , 0.5m/s2
+	//gsensor_i2c_write_byte(0x2b, (0x7c|(0x02)));
 
-#if defined(QMA7981_SWAP_XY)	// swap xy
-	gsensor_i2c_read_bytes(0x42, &reg_0x42, 1);
-	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
-	gsensor_i2c_write_byte(0x42, reg_0x42);
-#endif
-	//qmaX981_read_reg(0x1e, &reg_0x1e, 1);
+	//qmaX981_readreg(0x1e, &reg_0x1e, 1);
 	if((z_th&0x80))
 	{
 		reg_0x1e |= (x_th&0x0f);
@@ -988,9 +1012,17 @@ void qma7981_set_hand_up_down(void)
 }
 #endif
 
+#define STEP_W_TIME_L	300
+#define STEP_W_TIME_H	250
+
 static kal_bool qma7981_custom_init(void)
 {
 	unsigned char reg_0x10 = 0; 
+	unsigned char reg_0x11 = 0;
+#if defined(QMAX981_STEPCOUNTER)
+	unsigned char reg_0x14 = 0;
+	unsigned char reg_0x15 = 0;
+#endif
 	unsigned char reg_0x16 = 0;
 	unsigned char reg_0x18 = 0;
 	unsigned char reg_0x19 = 0;
@@ -1008,9 +1040,9 @@ static kal_bool qma7981_custom_init(void)
 	//0xe2	[258 hz 	3.87 ms]
 	reg_0x10 = 0xe1;
 	gsensor_i2c_write_byte(0x10, reg_0x10);
-
-//		gsensor_i2c_write_byte(0x4a, 0x08);	//Force I2C I2C interface
-	gsensor_i2c_write_byte(0x11, 0x80);
+	reg_0x11 = 0x80;
+	gsensor_i2c_write_byte(0x11, reg_0x11);
+//	gsensor_i2c_write_byte(0x4a, 0x08);	//Force I2C I2C interface
 	gsensor_i2c_write_byte(0x5f, 0x80);
 	gsensor_i2c_write_byte(0x5f, 0x00);	
 	gsensor_delay_ms(20);
@@ -1020,39 +1052,96 @@ static kal_bool qma7981_custom_init(void)
 	gsensor_i2c_read_bytes(0x19, &reg_0x19, 1);
 	gsensor_i2c_read_bytes(0x1a, &reg_0x1a, 1);
 	
-	QMAX981_INFO("read reg[%d %d %d %d] \n", reg_0x16, reg_0x18, reg_0x19, reg_0x1a);
+	QMAX981_INFO(MOD_MATV,"read reg[%d %d %d %d] \n", reg_0x16, reg_0x18, reg_0x19, reg_0x1a);
 // read reg
 	
 #if defined(QMAX981_STEPCOUNTER)
-	if(reg_0x10 == 0xe0)
+	reg_0x10 = 0xe1;
+	reg_0x11 = 0x80;
+
+	if(reg_0x11 == 0x80)		// 500K
 	{
-		// ODR: 65hz 15.48 ms
-		gsensor_i2c_write_byte(0x12, 0x94);
-		gsensor_i2c_write_byte(0x13, 0x80);		// clear step
-		gsensor_i2c_write_byte(0x13, 0x00);		// 
-		gsensor_i2c_write_byte(0x14, 0x12);		// STEP_TIME_LOW<7:0>*(1/ODR) 
-		gsensor_i2c_write_byte(0x15, 0x10);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+		reg_0x14 = (((STEP_W_TIME_L*100)/771)+1);		// 0xe1 odr 129.7hz, 7.71ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/771)+1);
+		if(reg_0x10 == 0xe0)		// odr 65hz
+		{
+			reg_0x14 = (reg_0x14>>1);
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe1)	// 129.7hz
+		{
+		}
+		else if(reg_0x10 == 0xe5)	// odr 32.5hz
+		{
+			reg_0x14 = (reg_0x14>>2);
+			reg_0x15 = (reg_0x15>>2);
+		}
 	}
-	else if(reg_0x10 == 0xe1)
+	else if(reg_0x11 == 0x81)	// 333K
 	{
-		// ODR: 130hz 7.74 ms
-		gsensor_i2c_write_byte(0x12, 0x94);
-		gsensor_i2c_write_byte(0x13, 0x80);		// clear step
-		gsensor_i2c_write_byte(0x13, 0x00);		// 
-		gsensor_i2c_write_byte(0x14, 0x24);		// STEP_TIME_LOW<7:0>*(1/ODR) 
-		gsensor_i2c_write_byte(0x15, 0x20);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+		reg_0x14 = (((STEP_W_TIME_L*100)/581)+1);	// 0xe2 odr 172.0930233 hz, 5.81ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/581)+1);
+		if(reg_0x10 == 0xe2)	// 172.0930233 hz
+		{
+		}
+		else if(reg_0x10 == 0xe1)	// 86.38132296 hz
+		{			
+			reg_0x14 = (reg_0x14>>1);
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe0)		// 43.2748538
+		{
+			reg_0x14 = (reg_0x14>>2);
+			reg_0x15 = (reg_0x15>>2);
+		}
 	}
-	else if(reg_0x10 == 0xe2)
+	else if(reg_0x11 == 0x82)		// 200K
 	{
-		// ODR: 258Hz 3.87 ms
-		gsensor_i2c_write_byte(0x12, 0x94);
-		gsensor_i2c_write_byte(0x13, 0x80);		// clear step
-		gsensor_i2c_write_byte(0x13, 0x00);		// 
-		gsensor_i2c_write_byte(0x14, 0x48);		// STEP_TIME_LOW<7:0>*(1/ODR) 
-		gsensor_i2c_write_byte(0x15, 0x40);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+		reg_0x14 = (((STEP_W_TIME_L*100)/967)+1);	//0xe2 103.3591731 hz, 9.675 ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/967)+1);
+		if(reg_0x10 == 0xe2)	// 103.3591731 hz
+		{
+		}
+		else if(reg_0x10 == 0xe1)
+		{			
+			reg_0x14 = (reg_0x14>>1);		// 51.88067445 hz
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe3)
+		{				
+			reg_0x14 = (reg_0x14<<1);		// 205.1282051 hz				
+			reg_0x15 = (reg_0x15<<1);
+		}
+	}		
+	else if(reg_0x11 == 0x83)		// 100K
+	{
+		reg_0x14 = (((STEP_W_TIME_L*100)/975)+1);	// 0xe3 102.5641026 hz, 9.75 ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/975)+1);
+		if(reg_0x10 == 0xe3)
+		{
+		}
+		else if(reg_0x10 == 0xe2)
+		{
+			reg_0x14 = (reg_0x14>>1);		// 51.67958656 hz
+			reg_0x15 = (reg_0x15>>1);
+		}
 	}
 
-	//gsensor_i2c_write_byte(0x1f, 0x00);
+	QMAX981_INFO(MOD_MATV,"0x14[%d] 0x15[%d] \n", reg_0x14, reg_0x15);
+	gsensor_i2c_write_byte(0x12, 0x94);
+	gsensor_i2c_write_byte(0x13, 0x80);		// clear step
+	gsensor_i2c_write_byte(0x13, 0x01);		// 0x7f(1/16) 0x00(1/8)
+	gsensor_i2c_write_byte(0x14, reg_0x14);		// STEP_TIME_LOW<7:0>*(1/ODR) 
+	gsensor_i2c_write_byte(0x15, reg_0x15);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+
+	//gsensor_i2c_write_byte(0x1f, 0x09); 	// 0 step
+	//gsensor_i2c_write_byte(0x1f, 0x29); 	// 4 step
+	//gsensor_i2c_write_byte(0x1f, 0x49); 	// 8 step
+	//gsensor_i2c_write_byte(0x1f, 0x69); 	// 12 step
+	//gsensor_i2c_write_byte(0x1f, 0x89); 	// 16 step
+	gsensor_i2c_write_byte(0x1f, 0xa9);		// 24 step
+	//gsensor_i2c_write_byte(0x1f, 0xc9); 	// 32 step
+	//gsensor_i2c_write_byte(0x1f, 0xe9); 	// 40 step
 
 	// step int
 #if defined(QMA7981_STEP_INT)
@@ -1068,6 +1157,7 @@ static kal_bool qma7981_custom_init(void)
 	gsensor_i2c_write_byte(0x16, reg_0x16);
 	gsensor_i2c_write_byte(0x19, reg_0x19);
 #endif
+
 #endif
 
 //RANGE<3:0> Acceleration range Resolution
@@ -1118,21 +1208,17 @@ static kal_bool qma7981_custom_init(void)
 	gsensor_i2c_write_byte(0x2c, reg_0x2c);
 	gsensor_i2c_write_byte(0x2d, 0x14);
 #endif
-
+ 
 #if defined(QMA7981_HAND_UP_DOWN)
-	qma7981_set_hand_up_down();
-
-	reg_0x16 |= 0x02;
+	qma7981_set_hand_up_down(0);
+	reg_0x16 |= 0x02;	// hand down
 	reg_0x19 |= 0x02;
-			
 	gsensor_i2c_write_byte(0x16, reg_0x16);
 	gsensor_i2c_write_byte(0x19, reg_0x19);
-	// hand down
-	reg_0x16 |= 0x04;
+	reg_0x16 |= 0x04;	// hand down
 	reg_0x19 |= 0x04;
 	gsensor_i2c_write_byte(0x16, reg_0x16);
 	gsensor_i2c_write_byte(0x19, reg_0x19);
-	// hand down	
 #endif
 
 #if defined(QMA7981_DATA_READY)

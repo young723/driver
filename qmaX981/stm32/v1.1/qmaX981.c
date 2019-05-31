@@ -172,7 +172,7 @@ const u8 qma7981_init_tbl[][2] =
 	{0x5f, 0x80},		// enable test mode,take control the FSM
 	{0x5f, 0x00},		//normal mode
 
-	{0xff, 1}
+	{0xff, 20}
 };
 
 
@@ -262,6 +262,86 @@ void qmaX981_set_range(u8 range)
 	}
 }
 
+
+#if defined(QMA7981_HAND_UP_DOWN)
+void qma7981_set_hand_up_down(int layout)
+{
+#if 1//defined(QMA7981_SWAP_XY)
+	unsigned char reg_0x42 = 0;
+#endif
+	unsigned char reg_0x1e = 0;
+	unsigned char reg_0x34 = 0;
+	unsigned char yz_th_sel = 4;
+	char y_th = -3; //-2;				// -16 ~ 15
+	unsigned char x_th = 6;		// 0--7.5
+	char z_th = 6;				// -8--7
+
+#if 1//defined(QMA7981_SWAP_XY)	// swap xy
+	if(layout%2)
+	{
+		qmaX981_readreg(0x42, &reg_0x42, 1);
+		reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
+		qmaX981_writereg(0x42, reg_0x42);
+	}
+#endif
+
+	if((layout >=0) && (layout<=3))
+	{
+		z_th = 3;
+		if((layout == 2)||(layout == 3))
+			y_th = 3; 
+		else if((layout == 0)||(layout == 1))	
+			y_th = -3;
+	}
+	else if((layout >=4) && (layout<=7))
+	{
+		z_th = -3;
+		
+		if((layout == 6)||(layout == 7))
+			y_th = 3; 
+		else if((layout == 4)||(layout == 5))	
+			y_th = -3;
+	}
+
+	// 0x34 YZ_TH_SEL[7:5]	Y_TH[4:0], default 0x9d  (YZ_TH_SEL   4   9.0 m/s2 | Y_TH  -3  -3 m/s2)
+	//qmaX981_writereg(0x34, 0x9d);	//|yz|>8 m/s2, y>-3 m/m2
+	if((y_th&0x80))
+	{
+		reg_0x34 |= yz_th_sel<<5;
+		reg_0x34 |= (y_th&0x0f)|0x10;
+		qmaX981_writereg(0x34, reg_0x34);
+	}
+	else
+	{	
+		reg_0x34 |= yz_th_sel<<5;
+		reg_0x34 |= y_th;
+		qmaX981_writereg(0x34, reg_0x34);	//|yz|>8m/s2, y<3 m/m2
+	}
+	//Z_TH<7:4>: -8~7, LSB 1 (unit : m/s2)	X_TH<3:0>: 0~7.5, LSB 0.5 (unit : m/s2) 
+	//qmaX981_writereg(0x1e, 0x68);	//6 m/s2, 4 m/m2
+
+	qmaX981_writereg(0x2a, (0x19|(0x03<<6)));			// 12m/s2 , 0.5m/s2
+	qmaX981_writereg(0x2b, (0x7c|(0x03>>2)));
+	//qmaX981_writereg(0x2a, (0x19|(0x02<<6)));			// 12m/s2 , 0.5m/s2
+	//qmaX981_writereg(0x2b, (0x7c|(0x02)));
+
+	//qmaX981_readreg(0x1e, &reg_0x1e, 1);
+	if((z_th&0x80))
+	{
+		reg_0x1e |= (x_th&0x0f);
+		reg_0x1e |= ((z_th<<4)|0x80);
+		qmaX981_writereg(0x1e, reg_0x1e);
+	}
+	else
+	{
+		reg_0x1e |= (x_th&0x0f);
+		reg_0x1e |= (z_th<<4);
+		qmaX981_writereg(0x1e, reg_0x1e);
+	}
+}
+#endif
+
+
 static s32 qma6981_read_raw_xyz(s32 *data)
 {
 	//s32 res;	
@@ -300,7 +380,8 @@ static s32 qma6981_read_raw_xyz(s32 *data)
 
 static s32 qma7981_read_raw_xyz(s32 *data)
 {
-	u8 databuf[6] = {0}; 	
+	u8 databuf[6] = {0};
+	short data_raw[3];
 	s32 ret;
 	//qma7981_acc_format data_14bit;
 
@@ -310,12 +391,12 @@ static s32 qma7981_read_raw_xyz(s32 *data)
 		return 0;	
 	}
 
-	data[0] = (short)((databuf[1]<<8)|(databuf[0]));
-	data[1] = (short)((databuf[3]<<8)|(databuf[2]));
-	data[2] = (short)((databuf[5]<<8)|(databuf[4]));
-	data[0] = data[0]>>2;
-	data[1] = data[1]>>2;
-	data[2] = data[2]>>2;
+	data_raw[0] = (short)((databuf[1]<<8)|(databuf[0]));
+	data_raw[1] = (short)((databuf[3]<<8)|(databuf[2]));
+	data_raw[2] = (short)((databuf[5]<<8)|(databuf[4]));
+	data[0] = (s32)data_raw[0]>>2;
+	data[1] = (s32)data_raw[1]>>2;
+	data[2] = (s32)data_raw[2]>>2;
 
 	return 1;
 }
@@ -349,13 +430,7 @@ s32 qmaX981_read_acc(s32 *accData)
 	accData[1] = (accData[1]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
 	accData[2] = (accData[2]*GRAVITY_EARTH_1000)/(g_qmaX981.lsb_1g);
 
-	//if(ret)
-	//{
-		//console_write("acc %f %f %f\n",accData[0]/1000.0f, accData[1]/1000.0f, accData[2]/1000.0f);
-	//}
-
 	return ret;
-
 }
 
 #if defined(QMAX981_STEPCOUNTER)
@@ -604,13 +679,21 @@ static s32 qma6981_initialize(void)
    	return ret;
 }
 
+#define STEP_W_TIME_L	300
+#define STEP_W_TIME_H	250
 
 static s32 qma7981_initialize(void)
 {
 	s32 ret = 0;
 	s32 index, total;
 	u8 data[2] = {0};
+  u8 DieId_H, DieId_L, WaferID;
 	u8 reg_0x10 = 0;
+	u8 reg_0x11 = 0;
+#if defined(QMAX981_STEPCOUNTER)
+	u8 reg_0x14 = 0;
+	u8 reg_0x15 = 0;
+#endif
 	u8 reg_0x16 = 0;
 	u8 reg_0x18 = 0;
 	u8 reg_0x19 = 0;
@@ -654,6 +737,12 @@ static s32 qma7981_initialize(void)
 	}
 
 	// read reg
+	
+	qmaX981_readreg(0x47, &DieId_L, 1);
+	qmaX981_readreg(0x48, &DieId_H, 1);
+	qmaX981_readreg(0x5a, &WaferID, 1);
+	QMAX981_LOG("DieId_L:%d	DieId_H:%d	WaferID:%d \n", DieId_L, DieId_H, WaferID&0x1f);
+
 	qmaX981_readreg(0x16, &reg_0x16, 1);
 	qmaX981_readreg(0x18, &reg_0x18, 1);
 	qmaX981_readreg(0x19, &reg_0x19, 1);
@@ -661,39 +750,98 @@ static s32 qma7981_initialize(void)
 #if defined(QMA7981_ANY_MOTION)||defined(QMA7981_NO_MOTION)
 	qmaX981_readreg(0x2c, &reg_0x2c, 1);
 #endif
-	// read reg
+	//0xe0	[MCLK/7695]
+	//0xe1	[MCLK/3855]
+	//0xe2	[MCLK/1935]
+	//0xe3	[MCLK/975]
 	reg_0x10 = 0xe1;
 	qmaX981_writereg(0x10, reg_0x10);
+	reg_0x11 = 0x80;
+	qmaX981_writereg(0x11, reg_0x11);
 #if defined(QMAX981_STEPCOUNTER)
-	if(reg_0x10 == 0xe0)
+	if(reg_0x11 == 0x80)		// 500K
 	{
-		// ODR: 65hz 15.48 ms
-		qmaX981_writereg(0x12, 0x94);
-		qmaX981_writereg(0x13, 0x80);		// clear step
-		qmaX981_writereg(0x13, 0x00);		// 
-		qmaX981_writereg(0x14, 0x12);		// STEP_TIME_LOW<7:0>*(1/ODR) 
-		qmaX981_writereg(0x15, 0x10);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+		reg_0x10 = 0xe1;
+		qmaX981_writereg(0x10, reg_0x10);
+	
+		reg_0x14 = (((STEP_W_TIME_L*100)/771)+1);		// odr 129.7hz, 7.71ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/771)+1);
+		if(reg_0x10 == 0xe0)		// odr 65hz
+		{
+			reg_0x14 = (reg_0x14>>1);
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe5)	// odr 32.5hz
+		{
+			reg_0x14 = (reg_0x14>>2);
+			reg_0x15 = (reg_0x15>>2);
+		}
 	}
-	else if(reg_0x10 == 0xe1)
+	else if(reg_0x11 == 0x81)	// 333K
+	{		
+		reg_0x10 = 0xe1;
+		qmaX981_writereg(0x10, reg_0x10);
+	
+		reg_0x14 = (((STEP_W_TIME_L*100)/581)+1);	// odr 172.0930233 hz, 5.81ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/581)+1);
+		if(reg_0x10 == 0xe1)	// 86.38132296 hz
+		{			
+			reg_0x14 = (reg_0x14>>1);
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe0)		// 43.2748538
+		{
+			reg_0x14 = (reg_0x14>>2);
+			reg_0x15 = (reg_0x15>>2);
+		}
+	}
+	else if(reg_0x11 == 0x82)		// 200K
 	{
-		// ODR: 130hz 7.74 ms
-		qmaX981_writereg(0x12, 0x94);
-		qmaX981_writereg(0x13, 0x80);		// clear step
-		qmaX981_writereg(0x13, 0x00);		// 
-		qmaX981_writereg(0x14, 0x24);		// STEP_TIME_LOW<7:0>*(1/ODR) 
-		qmaX981_writereg(0x15, 0x20);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
-	}
-	else if(reg_0x10 == 0xe2)
+		reg_0x10 = 0xe2;
+		qmaX981_writereg(0x10, reg_0x10);
+	
+		reg_0x14 = (((STEP_W_TIME_L*100)/967)+1);	// 103.3591731 hz, 9.675 ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/967)+1);
+		if(reg_0x10 == 0xe1)
+		{			
+			reg_0x14 = (reg_0x14>>1);		// 51.88067445 hz
+			reg_0x15 = (reg_0x15>>1);
+		}
+		else if(reg_0x10 == 0xe3)
+		{				
+			reg_0x14 = (reg_0x14<<1);		// 205.1282051 hz				
+			reg_0x15 = (reg_0x15<<1);
+		}
+	}		
+	else if(reg_0x11 == 0x83)		// 100K
 	{
-		// ODR: 258Hz 3.87 ms
-		qmaX981_writereg(0x12, 0x94);
-		qmaX981_writereg(0x13, 0x80);		// clear step
-		qmaX981_writereg(0x13, 0x00);		// 
-		qmaX981_writereg(0x14, 0x48);		// STEP_TIME_LOW<7:0>*(1/ODR) 
-		qmaX981_writereg(0x15, 0x40);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
+		reg_0x10 = 0xe3;
+		qmaX981_writereg(0x10, reg_0x10);
+	
+		reg_0x14 = (((STEP_W_TIME_L*100)/975)+1);	// 102.5641026 hz, 9.75 ms
+		reg_0x15 = (((STEP_W_TIME_H*100)/975)+1);
+		if(reg_0x10 == 0xe2)
+		{
+			reg_0x14 = (reg_0x14>>1);		// 51.67958656 hz
+			reg_0x15 = (reg_0x15>>1);
+		}
 	}
+	
+	QMAX981_LOG("0x14[%d] 0x15[%d] \n", reg_0x14, reg_0x15);
+	qmaX981_writereg(0x12, 0x94);
+	qmaX981_writereg(0x13, 0x80);		// clear step
+	qmaX981_writereg(0x13, 0x01);		// 0x7f(1/16) 0x00(1/8)
+	qmaX981_writereg(0x14, reg_0x14);		// STEP_TIME_LOW<7:0>*(1/ODR) 
+	qmaX981_writereg(0x15, reg_0x15);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
 
-	//qmaX981_writereg(0x1f, 0x00);
+	//qmaX981_writereg(0x1f, 0x09);		// 0 step
+	//qmaX981_writereg(0x1f, 0x29);		// 4 step
+	//qmaX981_writereg(0x1f, 0x49);		// 8 step
+	//qmaX981_writereg(0x1f, 0x69);		// 12 step
+	//qmaX981_writereg(0x1f, 0x89);		// 16 step
+	qmaX981_writereg(0x1f, 0xa9);		// 24 step
+	//qmaX981_writereg(0x1f, 0xc9);		// 32 step
+	//qmaX981_writereg(0x1f, 0xe9);		// 40 step
 
 	// step int
 	#if defined(QMA7981_STEP_INT)
@@ -775,22 +923,15 @@ static s32 qma7981_initialize(void)
 #endif
 
 #if defined(QMA7981_HAND_UP_DOWN)
+	qma7981_set_hand_up_down(g_qmaX981.layout);
 	reg_0x16 |= 0x02;
-	reg_0x19 |= 0x02;
-			
-	qmaX981_writereg(0x16, reg_0x16);
+	reg_0x19 |= 0x02;			
+	qmaX981_writereg(0x16, reg_0x16);	// hand up
 	qmaX981_writereg(0x19, reg_0x19);
-	// hand down
 	reg_0x16 |= 0x04;
 	reg_0x19 |= 0x04;
-	qmaX981_writereg(0x16, reg_0x16);
+	qmaX981_writereg(0x16, reg_0x16);	// hand down
 	qmaX981_writereg(0x19, reg_0x19);
-	// hand down	
-#if 0	// swap xy
-	read_reg(0x42, &reg_0x42, 1);
-	reg_0x42 |= 0x80;		// 0x42 bit 7 swap x and y
-	qmaX981_writereg(0x42, reg_0x42);
-#endif
 #endif
 
 #if defined(QMA7981_DATA_READY)
@@ -802,6 +943,9 @@ static s32 qma7981_initialize(void)
 #if defined(QMA7981_INT_LATCH)
 	qmaX981_writereg(0x21, 0x1f);	// default 0x1c, step latch mode
 #endif
+	// int default level set
+	//qmaX981_writereg(0x20, 0x00);
+	// int default level set
 
 #if defined(QMA7981_DOUBLE_TRIPLE_CLICK)
 	//memset(&g_click, 0, sizeof(g_click));
@@ -868,15 +1012,15 @@ static s32 qma6100_initialize(void)
 	}
 
 #if defined(QMA7981_6100_FIFO)
-	qmaX981_write_reg(0x31, 0x20);
-	qmaX981_write_reg(0x3E, 0x40);
-	qmaX981_write_reg(0x17, 0x20);
-	qmaX981_write_reg(0x1a, 0x20);
-	qmaX981_write_reg(0x20, 0x05);
+	qmaX981_writereg(0x31, 0x20);
+	qmaX981_writereg(0x3E, 0x40);
+	qmaX981_writereg(0x17, 0x20);
+	qmaX981_writereg(0x1a, 0x20);
+	qmaX981_writereg(0x20, 0x05);
 #if defined(USE_SPI)
-	//qmaX981_write_reg(0x21, 0x21);
+	//qmaX981_writereg(0x21, 0x21);
 #else
-	//qmaX981_write_reg(0x21, 0x01);
+	//qmaX981_writereg(0x21, 0x01);
 #endif
 #endif
 
@@ -1255,6 +1399,37 @@ void EXTI9_5_IRQHandler(void)
 #endif
 
 
+void qmaX981_usart_proc_hdlr(u8 * str, u8 len)
+{	
+	u8 value=0;
+
+	QMAX981_LOG("usart receive : %s \n", str);
+	if(len < 8)		return;
+	if((str[0]=='l') && (str[1]=='a') && (str[2]=='y') 
+		&& (str[3]=='o') && (str[4]=='u') && (str[5]=='t') && (str[6]=='='))
+	{
+		value = str[7]-'0';
+		if(value>=0 && value<=7)
+		{
+			g_qmaX981.layout = value;
+			QMAX981_LOG("set layout : %d \n", value);
+			memcpy(&g_qmaX981.cvt, &qst_map[g_qmaX981.layout], sizeof(qst_convert));			
+
+			if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
+				qma6981_initialize(); 
+			else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
+				qma7981_initialize();
+			else if(g_qmaX981.chip_type == CHIP_TYPE_QMA6100)
+				qma6100_initialize();
+		}
+		else
+		{
+			QMAX981_LOG("set layout : %d out range \n", value);
+		}
+	}
+}
+
+
 s32 qmaX981_init(void)
 {
 	s32 ret = 0;
@@ -1314,7 +1489,10 @@ s32 qmaX981_init(void)
 		}
 	}
 	// add by yangzhiqiang
-	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)		
+	g_qmaX981.layout = 0;
+	memcpy(&g_qmaX981.cvt, &qst_map[g_qmaX981.layout], sizeof(qst_convert));
+	
+	if(g_qmaX981.chip_type == CHIP_TYPE_QMA6981)
 		ret = qma6981_initialize();	
 	else if(g_qmaX981.chip_type == CHIP_TYPE_QMA7981)
 		ret = qma7981_initialize();
@@ -1323,8 +1501,6 @@ s32 qmaX981_init(void)
 	else
 		ret = 0;
 
-	g_qmaX981.layout = 3;
-	memcpy(&g_qmaX981.cvt, &qst_map[g_qmaX981.layout], sizeof(qst_convert));
 
 #if defined(QMAX981_STEP_DEBOUNCE_IN_INT)
 	qmaX981_step_debounce_reset();
