@@ -28,10 +28,15 @@
 static const struct i2c_device_id fis210x_gyro_i2c_id[] = {{FIS210X_GYRO_DEV_NAME, 0}, {} };
 #if defined(FIS210X_GYRO_MTK_KK)
 static struct i2c_board_info __initdata i2c_fis210x_gyro={ I2C_BOARD_INFO(FIS210X_GYRO_DEV_NAME, 0x6b)};
+extern struct gyro_hw *fis210x_get_cust_gyro_hw(void);
 #endif
 static int fis210x_gyro_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id);
 static int fis210x_gyro_i2c_remove(struct i2c_client *client);
+#if defined(FIS210X_GYRO_MTK_KK)
+static int fis210x_gyro_local_init(void);
+#else
 static int fis210x_gyro_local_init(struct platform_device *pdev);
+#endif
 static int fis210x_gyro_remove(void);
 
 extern int fis210x_acc_set_mode(enum FisImu_mode mode, u8 power_flag);
@@ -121,7 +126,7 @@ static int fis210x_gyro_i2c_write_block(struct i2c_client *client, u8 addr, u8 *
 
 int fis210x_gyro_i2c_read(u8 reg_addr, u8 *data, u8 len)
 {
-#if 1
+#if !defined(FIS210X_GYRO_MTK_KK)
 	int ret;
 
 	if(len > 1)
@@ -448,7 +453,7 @@ static int fis210x_gyro_read_raw(int raw_xyz[3])
 	unsigned char buf_reg[6];
 	short read_xyz[3];
 
-#if 0
+#if defined(FIS210X_GYRO_MTK_KK)
 	fis210x_gyro_i2c_read(FisRegister_Gx_L, &buf_reg[0], 1);		// 0x1f, 31
 	fis210x_gyro_i2c_read(FisRegister_Gx_H, &buf_reg[1], 1);
 	fis210x_gyro_i2c_read(FisRegister_Gy_L, &buf_reg[2], 1);
@@ -1451,7 +1456,7 @@ static int fis210x_gyro_i2c_probe(struct i2c_client *client, const struct i2c_de
 #if defined(FIS210X_GYRO_MTK_8_1)
 	err = get_gyro_dts_func(client->dev.of_node, &obj->hw);
 #elif defined(FIS210X_GYRO_MTK_KK)
-	memcpy(&obj->hw, get_cust_gyro_hw(), sizeof(struct gyro_hw));
+	memcpy(&obj->hw, fis210x_get_cust_gyro_hw(), sizeof(struct gyro_hw));
 #else
 	get_gyro_dts_func("mediatek,gyroscope", &obj->hw);
 #endif
@@ -1602,7 +1607,11 @@ static int fis210x_gyro_i2c_remove(struct i2c_client *client)
 	return 0;
 }
 
+#if defined(FIS210X_GYRO_MTK_KK)
+static int fis210x_gyro_local_init(void)
+#else
 static int fis210x_gyro_local_init(struct platform_device *pdev)
+#endif
 {
 	FIS210X_GYRO_FUN();
 	if(i2c_add_driver(&fis210x_gyro_i2c_driver))

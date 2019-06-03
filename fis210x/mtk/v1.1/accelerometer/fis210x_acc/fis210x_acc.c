@@ -238,15 +238,35 @@ static int fis210x_acc_i2c_write_block(struct i2c_client *client, u8 addr, u8 *d
 int fis210x_acc_i2c_read(u8 reg_addr, u8 *data, u8 len)
 {
 	int ret;
+#if defined(FIS210X_ACC_MTK_KK)
+	int loop_i;
+#endif
 
 #if defined(USE_SPI)
 	ret = fis210x_spi_read_bytes(fis210x_acc->spi_dev, reg_addr, data, len);
 #else
+	#if defined(FIS210X_ACC_MTK_KK)
+	fis210x_acc_i2c_client->addr = (fis210x_acc_i2c_client->addr&I2C_MASK_FLAG)|I2C_WR_FLAG|I2C_RS_FLAG;
+	data[0] = reg_addr;
+	for(loop_i = 0; loop_i < 5; loop_i++) 
+	{		 
+		ret = i2c_master_send(fis210x_acc_i2c_client, data, ((len<<0X08) | 0X01));		
+		if(ret >= 0)
+			break;
+
+		FIS210X_ACC_ERR("qmaX981 i2c_read retry %d times\n", loop_i);
+		mdelay(5); 
+	}		 
+	fis210x_acc_i2c_client->addr = fis210x_acc_i2c_client->addr & I2C_MASK_FLAG;
+
+	#else
+
 	if(len > 1)
 	{
 		reg_addr |= 0x80;
 	}
 	ret = i2c_smbus_read_i2c_block_data(fis210x_acc_i2c_client, reg_addr, len, data);
+	#endif
 #endif
 
 	if(ret < 0)
@@ -577,7 +597,7 @@ static int fis210x_acc_read_raw(int raw_xyz[3])
 	unsigned char buf_reg[6];
 	short read_xyz[3];
 
-#if 0
+#if defined(FIS210X_ACC_MTK_KK)
 	fis210x_acc_i2c_read(FisRegister_Ax_L, &buf_reg[0], 1);		// 0x19, 25
 	fis210x_acc_i2c_read(FisRegister_Ax_H, &buf_reg[1], 1);
 	fis210x_acc_i2c_read(FisRegister_Ay_L, &buf_reg[2], 1);
@@ -1028,7 +1048,7 @@ static int fis210x_acc_suspend(struct i2c_client *client, pm_message_t msg)
 static int fis210x_acc_resume(struct i2c_client *client)
 {
 	//struct fis210x_acc_t *obj = i2c_get_clientdata(client);
-	int err = 0;
+	//int err = 0;
 
 	FIS210X_ACC_LOG("fis210x_acc_resume");
 	if(NULL == fis210x_acc)

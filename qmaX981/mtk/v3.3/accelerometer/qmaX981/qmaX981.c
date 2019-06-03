@@ -1842,6 +1842,9 @@ void qma7981_set_hand_up_down(int layout)
 		reg_0x1e |= (z_th<<4);
 		qmaX981_write_reg(0x1e, reg_0x1e);
 	}
+
+	// RAISE_WAKE_PERIOD*(1/ODR), default 0x81
+	qmaX981_write_reg(0x35, 0x50);
 }
 #endif
 
@@ -2838,6 +2841,21 @@ static void qmaX981_irq1_work_step(struct work_struct *work)
 }
 #endif
 
+
+#if 0//defined(QMA7981_HAND_UP_DOWN)
+extern struct input_dev *kpd_input_dev;
+void qma7981_send_pwr_key(void)
+{
+	if (kpd_input_dev != NULL)
+	{
+		input_report_key(kpd_input_dev, KEY_POWER, 1);
+		input_report_key(kpd_input_dev, KEY_POWER, 0);
+		input_sync(kpd_input_dev);
+		QMAX981_LOG("qma7981_send_pwr_key\n");
+	}
+}
+#endif
+
 static void qmaX981_irq1_work(struct work_struct *work)
 {
 	unsigned char r_data[4];
@@ -2905,10 +2923,12 @@ static void qmaX981_irq1_work(struct work_struct *work)
 	else if(r_data[1] & 0x02)
 	{
 		QMAX981_LOG(" hand raise!\n");
+		//qma7981_send_pwr_key();
 	}
 	else if(r_data[1] & 0x04)
 	{
 		QMAX981_LOG(" hand down!\n");
+		//qma7981_send_pwr_key();
 	}
 #endif
 
@@ -2981,10 +3001,17 @@ static int qmaX981_irq1_config(void)
 	//mt_set_gpio_dir(gpio_num, GPIO_DIR_IN);
 		obj->irq1_num = gpio_to_irq(gpio_num);
 		QMAX981_LOG("irq1_num = %d\n", obj->irq1_num);
+#if defined(QMA7981_INT_LATCH)
+		if(request_irq(obj->irq1_num, qmaX981_irq1_handle, IRQF_TRIGGER_HIGH, "mediatek, gse_1-eint", NULL)) {
+			QMAX981_ERR("IRQ LINE NOT AVAILABLE!!\n");
+			return -EINVAL;
+		}
+#else
 		if(request_irq(obj->irq1_num, qmaX981_irq1_handle, IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND, "mediatek, gse_1-eint", NULL)) {
 			QMAX981_ERR("IRQ LINE NOT AVAILABLE!!\n");
 			return -EINVAL;
 		}
+#endif
 		enable_irq_wake(obj->irq1_num);
 		disable_irq(obj->irq1_num);
 		enable_irq(obj->irq1_num);
@@ -3076,10 +3103,17 @@ static int qmaX981_irq2_config(void)
 			QMAX981_ERR("irq_of_parse_and_map fail!!\n");
 			return -EINVAL;
 		}
+#if defined(QMA7981_INT_LATCH)
+		if(request_irq(obj->irq2_num, qmaX981_irq2_handle, IRQF_TRIGGER_HIGH, "mediatek, gse_2-eint", NULL)) {
+			QMAX981_ERR("IRQ LINE NOT AVAILABLE!!\n");
+			return -EINVAL;
+		}
+#else
 		if(request_irq(obj->irq2_num, qmaX981_irq2_handle, IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND, "mediatek, gse_2-eint", NULL)) {
 			QMAX981_ERR("IRQ LINE NOT AVAILABLE!!\n");
 			return -EINVAL;
 		}
+#endif
 		enable_irq_wake(obj->irq2_num);
 		disable_irq(obj->irq2_num);
 		enable_irq(obj->irq2_num);
