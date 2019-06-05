@@ -375,6 +375,10 @@ unsigned char qmaX981_irq_hdlr(void)
 		return 0xff;
 	}
 #endif
+#if defined(QMA7981_DATA_READY)
+	//QST_PRINTF("irq data ready!!! \n");
+	return 0;
+#endif
 	qmaX981_read_reg(0x09, r_data, 3);
 //	QST_PRINTF("irq [%d %d %d]!!!", r_data[0],r_data[1],r_data[2]);
 	if(r_data[0] & 0xF)
@@ -517,6 +521,8 @@ void qma7981_set_hand_up_down(int layout)
 		reg_0x1e |= (z_th<<4);
 		qmaX981_write_reg(0x1e, reg_0x1e);
 	}
+
+	qmaX981_write_reg(0x35, 0x50);
 }
 #endif
 
