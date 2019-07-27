@@ -65,7 +65,7 @@
 
 
 #define MAX_CHOOSE_BARO_NUM 5
-//#define QMP6988_GET_DATA_2
+#define QMP6988_GET_DATA_2
 
 struct baro_control_path {
 	int (*open_report_data)(int open);

@@ -929,7 +929,7 @@ static int qma7981_initialize(void)
 	qmaX981_write_reg(0x21, 0x1f);	// default 0x1c, step latch mode
 #endif
 
-//	qmaX981_write_reg(0x11, 0x80);
+	//qmaX981_write_reg(0x11, 0x80);
 	qmaX981_write_reg(0x5f, 0x80);
 	qmaX981_write_reg(0x5f, 0x00);
 	mdelay(20);

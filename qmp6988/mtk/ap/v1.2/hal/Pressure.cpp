@@ -50,15 +50,12 @@
 #include <inttypes.h>
 #include "qmp6988_algo.h"
 
-#ifdef LOG_TAG
 #undef LOG_TAG
 #define LOG_TAG "Pressure"
-#endif
-
 
 #define IGNORE_EVENT_TIME 0
 #define DEVICE_PATH           "/dev/m_baro_misc"
-static int qmp6988_flag = 0;
+static int qmp6988_flag = -1;
 
 PressureSensor::PressureSensor()
     : mSensorReader(32) {
@@ -102,8 +99,12 @@ PressureSensor::PressureSensor()
     } else {
         ALOGE("open misc path %s fail ", datapath);
     }
-// add by yangzhiqiang
-	qmp6988_flag = qmp6988_algo_init();
+	// add by yangzhiqiang
+	if(qmp6988_flag == -1)
+	{
+		qmp6988_flag = qmp6988_algo_init();
+		//ALOGD("qmp6988_flag = %d", qmp6988_flag);
+	}
 // yangzhiqiang
 }
 
@@ -134,6 +135,9 @@ int PressureSensor::enable(int32_t handle, int en)
     }
     TEMP_FAILURE_RETRY(write(fd, buf, sizeof(buf)));
     close(fd);
+
+
+
     return 0;
 }
 int PressureSensor::setDelay(int32_t handle, int64_t ns)
@@ -205,17 +209,19 @@ int PressureSensor::readEvents(sensors_event_t* data, int count)
 
     while (count && mSensorReader.readEvent(&event)) {
         processEvent(event);
-        /* auto cts may request flush event when sensor disable, ALPS03452281 */
-        //if (mEnabled) {
-            if (mPendingEvent.timestamp > mEnabledTime) {
-                *data++ = mPendingEvent;
-                numEventReceived++;
-                count--;
-            }
-        //}
+        if (event->flush_action <= FLUSH_ACTION) {
+            /* auto cts may request flush event when sensor disable, ALPS03452281 */
+            *data++ = mPendingEvent;
+            numEventReceived++;
+            count--;
+        }
         mSensorReader.next();
     }
     return numEventReceived;
+}
+
+bool PressureSensor::pendingEvent(void) {
+    return mSensorReader.pendingEvent();
 }
 
 void PressureSensor::processEvent(struct sensor_event const *event)
@@ -234,10 +240,10 @@ void PressureSensor::processEvent(struct sensor_event const *event)
         mPendingEvent.sensor = ID_PRESSURE;
         mPendingEvent.type = SENSOR_TYPE_PRESSURE;
         mPendingEvent.timestamp = event->time_stamp;
-		if(qmp6988_flag)
+		if(qmp6988_flag == 1)
 		{
-			//mPendingEvent.pressure = qmp6988_calc(event->word[0], event->word[1]);
-			mPendingEvent.pressure = qmp6988_calc_press();
+			mPendingEvent.pressure = qmp6988_calc(event->word[0], event->word[1]);
+			//mPendingEvent.pressure = qmp6988_calc_press();
 		}
 		else
 		{			

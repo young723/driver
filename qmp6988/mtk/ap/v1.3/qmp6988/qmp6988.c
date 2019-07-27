@@ -15,8 +15,8 @@
 #include <linux/math64.h>
 
 #include <cust_baro.h>
-#include "qmp6988.h"
 #include "barometer.h"
+#include "qmp6988.h"
 /* #include <linux/hwmsen_helper.h> */
 
 typedef struct qmp6988_data
@@ -46,6 +46,13 @@ static struct baro_init_info qmp6988_init_info = {
 	.init = qmp6988_local_init,
 	.uninit = qmp6988_remove,
 };
+
+static QMP6988_S32_t _b00, _a0;
+static QMP6988_S32_t _bt1, _bp1;
+static QMP6988_S32_t _bt2;
+static QMP6988_S32_t _b11, _bp2;
+static QMP6988_S32_t _b12, _b21, _bp3;
+static QMP6988_S32_t _a1, _a2;
 
 static struct qmp6988_calibration_data qmp6988_cali;
 static qmp6988_data_t *g_qmp6988=NULL;
@@ -210,27 +217,25 @@ static int qmp6988_get_calibration_data(void)
 	QMP6988_LOG("COE_bp2[%d] COE_b12[%d] COE_b21[%d] COE_bp3[%d]\n",
 		qmp6988_cali.COE_bp2,qmp6988_cali.COE_b12,qmp6988_cali.COE_b21,qmp6988_cali.COE_bp3);
 	QMP6988_LOG("<-----------calibration data-------------->\n");
-#if 0
-	a0 = qmp6988_cali.COE_a0 /16.0f;
-	b00 = qmp6988_cali.COE_b00 /16.0f;
 
-	a1 = Conv_A_S[0][0] + Conv_A_S[0][1] * qmp6988_cali.COE_a1 / 32767.0f;
-	a2 = Conv_A_S[1][0] + Conv_A_S[1][1] * qmp6988_cali.COE_a2 / 32767.0f;
-	bt1 = Conv_A_S[2][0] + Conv_A_S[2][1] * qmp6988_cali.COE_bt1 / 32767.0f;
-	bt2 = Conv_A_S[3][0] + Conv_A_S[3][1] * qmp6988_cali.COE_bt2 / 32767.0f;
-	bp1 = Conv_A_S[4][0] + Conv_A_S[4][1] * qmp6988_cali.COE_bp1 / 32767.0f;
-	b11 = Conv_A_S[5][0] + Conv_A_S[5][1] * qmp6988_cali.COE_b11 / 32767.0f;
-	bp2 = Conv_A_S[6][0] + Conv_A_S[6][1] * qmp6988_cali.COE_bp2 / 32767.0f;
-	b12 = Conv_A_S[7][0] + Conv_A_S[7][1] * qmp6988_cali.COE_b12 / 32767.0f;
-	b21 = Conv_A_S[8][0] + Conv_A_S[8][1] * qmp6988_cali.COE_b21 / 32767.0f;
-	bp3 = Conv_A_S[9][0] + Conv_A_S[9][1] * qmp6988_cali.COE_bp3 / 32767.0f;
+	_b00 = qmp6988_cali.COE_b00; // 20Q4
+	_bt1 = 2982L * (int64_t)qmp6988_cali.COE_bt1 + 107370906L; // 28Q15
+	_bt2 = 329854L * (int64_t)qmp6988_cali.COE_bt2 + 108083093L; // 34Q38
+	_bp1 = 19923L * (int64_t)qmp6988_cali.COE_bp1 + 1133836764L; // 31Q20
+	_b11 = 2406L * (int64_t)qmp6988_cali.COE_b11+ 118215883L; // 28Q34
+	_bp2 = 3079L * (int64_t)qmp6988_cali.COE_bp2 - 181579595L; // 29Q43
+	_b12 = 6846L * (int64_t)qmp6988_cali.COE_b12 + 85590281L; // 29Q53
+	_b21 = 13836L * (int64_t)qmp6988_cali.COE_b21 + 79333336L; // 29Q60
+	_bp3 = 2915L * (int64_t)qmp6988_cali.COE_bp3 + 157155561L; // 28Q65
+	_a0 = qmp6988_cali.COE_a0; // 20Q4
+	_a1 = 3608L * (int32_t)qmp6988_cali.COE_a1 - 1731677965L; // 31Q23
+	_a2 = 16889L * (int32_t) qmp6988_cali.COE_a2 - 87619360L; // 30Q47
 
-	QMP6988_LOG("<----------- float calibration data -------------->\n");
-	QMP6988_LOG("a0[%lle] a1[%lle] a2[%lle] b00[%lle]\n",a0,a1,a2,b00);
-	QMP6988_LOG("bt1[%lle]	bt2[%lle]	bp1[%lle]	b11[%lle]\n",bt1,bt2,bp1,b11);
-	QMP6988_LOG("bp2[%lle]	b12[%lle]	b21[%lle]	bp3[%lle]\n",bp2,b12,b21,bp3);
-	QMP6988_LOG("<----------- float calibration data -------------->\n");
-#endif
+	QMP6988_LOG("<----------- int calibration data -------------->\n");
+	QMP6988_LOG("a0[%ld]	a1[%ld]	a2[%ld]	b00[%ld]\n",_a0,_a1,_a2,_b00);
+	QMP6988_LOG("bt1[%ld]	bt2[%ld]	bp1[%ld]	b11[%ld]\n",_bt1,_bt2,_bp1,_b11);
+	QMP6988_LOG("bp2[%ld]	b12[%ld]	b21[%ld]	bp3[%ld]\n",_bp2,_b12,_b21,_bp3);
+	QMP6988_LOG("<----------- int calibration data -------------->\n");
 
 	return 0;
 }
@@ -302,6 +307,7 @@ static int qmp6988_read_raw_data(s32 *temp, s32 *press)
 {
 	int err = 0;
 	int P_read, T_read;
+	int T_int, P_int;
 	unsigned char reg_data[6];
 
 	err = qmp6988_i2c_read_block(g_qmp6988->client, 0xF7, reg_data, 6);
@@ -323,8 +329,11 @@ static int qmp6988_read_raw_data(s32 *temp, s32 *press)
 		((QMP6988_S32_t)reg_data[5]));
 	T_read = (QMP6988_S32_t)(T_read - 8388608);
 
-	*temp = T_read;
-	*press = P_read;
+	T_int = qmp6988_convTx_02e(T_read);
+	P_int = qmp6988_get_pressure_02e(P_read, T_int);
+
+	*temp = T_int;	//T_read;
+	*press = P_int;	//P_read;
 
 	if(g_qmp6988->power_mode == QMP6988_FORCED_MODE)
 	{	
@@ -372,6 +381,61 @@ void qmp6988_set_app(qmp6988_app_e app)
 	else
 	{
 	}
+}
+
+
+static QMP6988_S16_t qmp6988_convTx_02e(QMP6988_S32_t dt) 
+{
+	QMP6988_S16_t ret;
+	QMP6988_S64_t wk1, wk2;
+
+	// wk1: 60Q4 // bit size
+	wk1 = ((QMP6988_S64_t)_a1 * (QMP6988_S64_t)dt); // 31Q23+24-1=54 (54Q23)
+	wk2 = ((QMP6988_S64_t)_a2 * (QMP6988_S64_t)dt) >> 14; // 30Q47+24-1=53 (39Q33)
+	wk2 = (wk2 * (QMP6988_S64_t)dt) >> 10; // 39Q33+24-1=62 (52Q23)
+	wk2 = ((wk1 + wk2) / 32767) >> 19; // 54,52->55Q23 (20Q04)
+	ret = (QMP6988_S16_t)((_a0 + wk2) >> 4); // 21Q4 -> 17Q0
+	return ret;
+}
+
+static QMP6988_S32_t qmp6988_get_pressure_02e( QMP6988_S32_t dp, QMP6988_S16_t tx)
+{
+	QMP6988_S32_t ret;
+	QMP6988_S64_t wk1, wk2, wk3;
+
+	// wk1 = 48Q16 // bit size
+	wk1 = ((QMP6988_S64_t)_bt1 * (QMP6988_S64_t)tx); // 28Q15+16-1=43 (43Q15)
+	wk2 = ((QMP6988_S64_t)_bp1 * (QMP6988_S64_t)dp) >> 5; // 31Q20+24-1=54 (49Q15)
+	wk1 += wk2; // 43,49->50Q15
+	wk2 = ((QMP6988_S64_t)_bt2 * (QMP6988_S64_t)tx) >> 1; // 34Q38+16-1=49 (48Q37)
+	wk2 = (wk2 * (QMP6988_S64_t)tx) >> 8; // 48Q37+16-1=63 (55Q29)
+	wk3 = wk2; // 55Q29
+	wk2 = ((QMP6988_S64_t)_b11 * (QMP6988_S64_t)tx) >> 4; // 28Q34+16-1=43 (39Q30)
+	wk2 = (wk2 * (QMP6988_S64_t)dp) >> 1; // 39Q30+24-1=62 (61Q29)
+	wk3 += wk2; // 55,61->62Q29
+	wk2 = ((QMP6988_S64_t)_bp2 * (QMP6988_S64_t)dp) >> 13; // 29Q43+24-1=52 (39Q30)
+	wk2 = (wk2 * (QMP6988_S64_t)dp) >> 1; // 39Q30+24-1=62 (61Q29)
+	wk3 += wk2; // 62,61->63Q29
+	wk1 += wk3 >> 14; // Q29 >> 14 -> Q15
+	wk2 = ((QMP6988_S64_t)_b12 * (QMP6988_S64_t)tx); // 29Q53+16-1=45 (45Q53)
+	wk2 = (wk2 * (QMP6988_S64_t)tx) >> 22; // 45Q53+16-1=61 (39Q31)
+	wk2 = (wk2 * (QMP6988_S64_t)dp) >> 1; // 39Q31+24-1=62 (61Q30)
+	wk3 = wk2; // 61Q30
+	wk2 = ((QMP6988_S64_t)_b21 * (QMP6988_S64_t)tx) >> 6; // 29Q60+16-1=45 (39Q54)
+	wk2 = (wk2 * (QMP6988_S64_t)dp) >> 23; // 39Q54+24-1=62 (39Q31)
+	wk2 = (wk2 * (QMP6988_S64_t)dp) >> 1; // 39Q31+24-1=62 (61Q20)
+	wk3 += wk2; // 61,61->62Q30
+	wk2 = ((QMP6988_S64_t)_bp3 * (QMP6988_S64_t)dp) >> 12; // 28Q65+24-1=51 (39Q53)
+	wk2 = (wk2 * (QMP6988_S64_t)dp) >> 23; // 39Q53+24-1=62 (39Q30)
+	wk2 = (wk2 * (QMP6988_S64_t)dp); // 39Q30+24-1=62 (62Q30)
+	wk3 += wk2; // 62,62->63Q30
+	wk1 += wk3 >> 15; // Q30 >> 15 = Q15
+	wk1 /= 32767L;
+	wk1 >>= 11; // Q15 >> 7 = Q4
+	wk1 += _b00; // Q4 + 20Q4
+	//wk1 >>= 4; // 28Q4 -> 24Q0
+	ret = (QMP6988_S32_t)wk1;
+	return ret;
 }
 
 
@@ -1108,7 +1172,13 @@ static int qmp6988_i2c_probe(struct i2c_client *client, const struct i2c_device_
 	g_qmp6988->t_oversampling = QMP6988_OVERSAMPLING_2X;
 
 	mutex_init(&obj->lock);
+	client->addr = 0x70;
 	err = qmp6988_init_client();
+	if(err)
+	{
+		client->addr = 0x56;
+		err = qmp6988_init_client();	
+	}
 	if(err)
 	{
 		goto exit_init_client_failed;
@@ -1160,7 +1230,7 @@ static int qmp6988_i2c_probe(struct i2c_client *client, const struct i2c_device_
 #if defined(QMP6988_GET_DATA_2)
 	data.get_data_2 = qmp6988_get_data2;
 #endif
-	data.vender_div = 1;
+	data.vender_div = 16;
 	err = baro_register_data_path(&data);
 	if(err)
 	{

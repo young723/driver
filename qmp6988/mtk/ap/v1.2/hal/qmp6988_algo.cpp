@@ -196,7 +196,7 @@ int qmp6988_algo_init(void)
 		b12 = Conv_A_S[7][0] + Conv_A_S[7][1] * qmp6988_cali.COE_b12 / 32767.0f;
 		b21 = Conv_A_S[8][0] + Conv_A_S[8][1] * qmp6988_cali.COE_b21 / 32767.0f;
 		bp3 = Conv_A_S[9][0] + Conv_A_S[9][1] * qmp6988_cali.COE_bp3 / 32767.0f;
-
+#if 1
 		ALOGD("<-----------get calibration data-------------->\n");
 		ALOGD("COE_a0[%d]	COE_a1[%d]	COE_a2[%d]	COE_b00[%d]\n",
 			qmp6988_cali.COE_a0,qmp6988_cali.COE_a1,qmp6988_cali.COE_a2,qmp6988_cali.COE_b00);
@@ -211,7 +211,7 @@ int qmp6988_algo_init(void)
 		ALOGD("bt1[%lle]	bt2[%lle]	bp1[%lle]	b11[%lle]\n",bt1,bt2,bp1,b11);
 		ALOGD("bp2[%lle]	b12[%lle]	b21[%lle]	bp3[%lle]\n",bp2,b12,b21,bp3);
 		ALOGD("<----------- float calibration data dones-------------->\n");
-
+#endif
 		return 1;
 	}
 	else

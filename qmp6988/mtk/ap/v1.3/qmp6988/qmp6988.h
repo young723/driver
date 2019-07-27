@@ -58,6 +58,7 @@
 #define QMP6988_S16_t short
 #define QMP6988_U32_t unsigned int
 #define QMP6988_S32_t int
+#define QMP6988_S64_t long
 
 struct qmp6988_calibration_data 
 {
@@ -87,11 +88,22 @@ typedef enum
 	QMP6988_APP_TOTAL
 } qmp6988_app_e;
 
-
+#ifndef BROMETER
 #define BROMETER							0X87
+#endif
+
 #define BAROMETER_GET_CALI					_IOR(BROMETER, 0x06, struct qmp6988_calibration_data)
+#ifndef BAROMETER_IOCTL_READ_CHIPINFO
+#define BAROMETER_IOCTL_READ_CHIPINFO				_IOR(BROMETER, 0x04, int)
+#endif
+
 #ifdef CONFIG_COMPAT
+
 #define COMPAT_BAROMETER_GET_CALI			_IOR(BROMETER, 0x06, struct qmp6988_calibration_data)
+#ifndef COMPAT_BAROMETER_IOCTL_READ_CHIPINFO
+#define COMPAT_BAROMETER_IOCTL_READ_CHIPINFO		_IOR(BROMETER, 0x04, compat_int_t)
+#endif
+
 #endif
 
 #endif/* QST_QMP6988_H */
