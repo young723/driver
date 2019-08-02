@@ -60,10 +60,12 @@
 #define QCOM_PLATFORM
 #define	QMCX983_BUFSIZE		0x20
 
-#define QMC6983_A1_D1             0
-#define QMC6983_E1		  		  1	
-#define QMC7983                   2
-#define QMC7983_LOW_SETRESET      3
+#define QMC6983_A1_D1             	0
+#define QMC6983_E1		  			1
+#define QMC6983_E1_Metal		  	 2
+#define QMC7983_Vertical            3
+#define QMC7983_Slope		4
+#define NULL_QMC_CHIP       5
 
 /*
  * QMCX983 magnetometer data
@@ -112,8 +114,8 @@ struct QMCX983_data{
 
 static struct QMCX983_data *mag;
 static int chip_id = QMC6983_E1;
-static int OTP_Kx;
-static int OTP_Ky;
+static int OTP_Kx = 0;
+static int OTP_Ky = 0;
 
 static struct sensors_classdev sensors_cdev = {
 	.name = "qmcX983-mag",
@@ -354,7 +356,7 @@ static int qmcX983_enable(struct QMCX983_data *QMCX983)
 	data = 0x01;
 	err = qmcX983_i2c_write(0x21, &data, 1);	
 	
-	if(chip_id == QMC6983_E1 || chip_id == QMC7983 || chip_id == QMC7983_LOW_SETRESET)
+	if(chip_id != QMC6983_A1_D1)
 	{
 
 		data = 0x80;
@@ -362,6 +364,12 @@ static int qmcX983_enable(struct QMCX983_data *QMCX983)
 		
 		data = 0x0c;
 		err = qmcX983_i2c_write(0x0a,&data,1); 		
+	}
+	
+	if(chip_id == QMC6983_E1_Metal || chip_id == QMC7983_Slope)
+	{
+		data = 0x80;
+		err = qmcX983_i2c_write(0x1b,&data,1); 			
 	}
 	
 	qmcX983_set_range(QMCX983_RNG_8G);  
@@ -809,14 +817,109 @@ static struct miscdevice qmc_compass_dev = {
 	.fops = &qmcX983_fops,
 };
 
+static int qmcX983_device_check(void){
+	unsigned char databuf[2] = {0};
+	int ret = 0; 
+	
+	databuf[0] = 0x0d;
+	
+	ret = qmcX983_i2c_read(databuf[0],&databuf[1],1);
+	
+	if(0xff == databuf[1]){
+		chip_id = QMC6983_A1_D1;
+	}else if(0x31 == databuf[1]){
+		chip_id = QMC6983_E1;
+	}else if(0x32 == databuf[1]){
+		
+		//read otp 0x30
+		databuf[0] = 0x2e;
+		databuf[1] = 0x01;
+		ret = qmcX983_i2c_write(databuf[0],&databuf[1],1);
+	
+		databuf[0] = 0x2f;
+		ret = qmcX983_i2c_read(databuf[0],&databuf[1],1);
+		
+		if(((databuf[1]&0x04 )>> 2))
+		{
+			chip_id = QMC6983_E1_Metal;
+		}else{
+			
+			//read otp 0x3e
+			databuf[0] = 0x2e;
+			databuf[1] = 0x0f;
+			ret = qmcX983_i2c_write(databuf[0],&databuf[1],1);
+
+			databuf[0] = 0x2f;
+			ret = qmcX983_i2c_read(databuf[0],&databuf[1],1);
+
+			if(0x02 == ((databuf[1]&0x3c)>>2)){
+				chip_id = QMC7983_Vertical;
+			}
+			if(0x03 == ((databuf[1]&0x3c)>>2)){
+				chip_id = QMC7983_Slope;
+			}
+		}
+	}else{
+		chip_id = NULL_QMC_CHIP;
+	}
+	return ret;
+}
+
+static int qmcX983_otp_check(void){
+	unsigned char databuf[4] = {0};
+	
+	if(chip_id == QMC6983_A1_D1){
+		OTP_Kx = 0;
+		OTP_Ky = 0;
+	}else{
+		//read kx
+		databuf[0] = 0x2e;
+		databuf[1] = 0x0a;
+
+		qmcX983_i2c_write(databuf[0],&databuf[1],1);
+	
+		databuf[0] = 0x2f;
+		qmcX983_i2c_read(databuf[0],&databuf[1],1);
+		
+		if(((databuf[1]&0x3f) >> 5) == 1)
+			OTP_Kx = (databuf[0]&0x1f)-32;
+		else
+			OTP_Kx = databuf[0]&0x1f;	
+		
+		MSE_LOG("%s: OTP_Kx %d\n",__func__,OTP_Kx);
+		
+		//read ky
+		databuf[0] = 0x2e;
+		databuf[1] = 0x0d;
+		qmcX983_i2c_write(databuf[0],&databuf[1],1);
+		
+		databuf[0] = 0x2f;
+		qmcX983_i2c_read(databuf[0],&databuf[1],1);
+		
+		databuf[3] = databuf[1];
+		
+		databuf[0] = 0x2e;
+		databuf[1] = 0x0f;
+		qmcX983_i2c_write(databuf[0],&databuf[1],1);
+		
+		databuf[0] = 0x2f;
+		qmcX983_i2c_read(databuf[0],&databuf[1],1);
+		databuf[4] = databuf[1];
+		
+		if((databuf[3] >> 7) == 1)
+			OTP_Ky = (((databuf[3]&0x70) >> 4)*4 + (databuf[4] >> 6))-32;
+		else
+			OTP_Ky = (((databuf[3]&0x70) >> 4)*4 + (databuf[4] >> 6));	
+		
+		MSE_LOG("%s: OTP_Ky %d\n",__func__,OTP_Ky);
+	}	
+}
 
 static int qmcX983_probe(struct i2c_client *client, const struct i2c_device_id *id)
 {
 	struct QMCX983_platform_data *pdata;
 	int err = 0;
-	unsigned char databuf[2] = {0};
-	unsigned char data = 0;
-
+	
 	MSE_FUN();
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
@@ -865,66 +968,16 @@ static int qmcX983_probe(struct i2c_client *client, const struct i2c_device_id *
 	i2c_set_clientdata(client, mag);
 
 	/* read chip id */
-	qmcX983_i2c_read(0x0d,databuf,1);
-
-	if (databuf[0] == 0xff )
-	{
-		chip_id = QMC6983_A1_D1;
-	}
-	else if(databuf[0] == 0x31) //QMC7983 asic 
-	{
-		qmcX983_i2c_read(0x3E,databuf,1);
-		if((databuf[0] & 0x20) == 1)
-			chip_id = QMC6983_E1;
-		else if((databuf[0] & 0x20) == 0)
-			chip_id = QMC7983;
-	}
-	else if(databuf[0] == 0x32) //QMC7983 asic low setreset
-	{
-		chip_id = QMC7983_LOW_SETRESET;	
-	}
-	else 
-	{
+	qmcX983_device_check();
+	
+	MSE_LOG("%s chip_id = %d\n",__func__,chip_id);
+	if(chip_id == NULL_QMC_CHIP){
 		MSE_ERR("No QST CHIP ONBOARD\n");
 		goto exit2;
 	}
-	MSE_LOG("%s chip_id = %d\n",__func__,chip_id);	
 	
-	if(chip_id == QMC6983_A1_D1){
-		OTP_Kx = 0;
-		OTP_Ky = 0;
-	}else{
-		//read kx
-		data = 0x0a;
-		qmcX983_i2c_write(0X2e,&data,1);
-	
-		qmcX983_i2c_read(0X2f,&databuf[0],1);
-		
-		if(((databuf[0]&0x3f) >> 5) == 1)
-			OTP_Kx = (databuf[0]&0x1f)-32;
-		else
-			OTP_Kx = databuf[0]&0x1f;	
-		
-		MSE_LOG("%s: OTP_Kx %d\n",__func__,OTP_Kx);
-		
-		//read ky
-		data = 0x0d;
-		qmcX983_i2c_write(0x2e,&data,1);
-		
-		qmcX983_i2c_read(0x2f,&databuf[0],1);
-		
-		data = 0x0f;
-		qmcX983_i2c_write(0x2e,&data,1);
-		
-		qmcX983_i2c_read(0x2f,&databuf[1],1);
-		
-		if((databuf[0] >> 7) == 1)
-			OTP_Ky = (((databuf[0]&0x70) >> 4)*4 + (databuf[1] >> 6))-32;
-		else
-			OTP_Ky = (((databuf[0]&0x70) >> 4)*4 + (databuf[1] >> 6));	
-		
-		MSE_LOG("%s: OTP_Ky %d\n",__func__,OTP_Ky);
-	}
+	//check otp register
+	qmcX983_otp_check();
 	
 	/* check connection */
 	err = qmc_compass_power_init(mag, true);

@@ -26,6 +26,12 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
 OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --------------------------------------------------------------------------*/
+
+#include <stdio.h>
+#include <math.h>
+#include <float.h>
+#include "CalibrationModule.h"
+#include <stdint.h>
 #include <errno.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
@@ -34,215 +40,78 @@ IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <poll.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <dirent.h>
 #include <sys/select.h>
 #include <linux/input.h>
 
-#include "QMCD_API.h"
+#include <hardware/sensors.h>
 
+#define LOG_TAG "sensor_cal.common"
+#include <utils/Log.h>
+#include "qmc_common.h"
+#include "qmc_api.h"
 
 #define SENSOR_CAL_ALGO_VERSION 1
-
 #define ARRAY_SIZE(a) (sizeof(a) / sizeof(a[0]))
-#define scalar 3.125
-#define scalar2uT 31.25
+
+
 
 struct sensor_cal_module_t SENSOR_CAL_MODULE_INFO;
 static struct sensor_cal_algo_t algo_list[];
 
-struct hwmsen_convert {
-	signed char sign[4];
-	unsigned char map[4];
-};
-
-struct hwmsen_convert map[] = {
-    { { 1, 1, 1}, {0, 1, 2} },
-    { {-1, 1, 1}, {1, 0, 2} },
-    { {-1,-1, 1}, {0, 1, 2} },
-    { { 1,-1, 1}, {1, 0, 2} },
-
-    { {-1, 1,-1}, {0, 1, 2} },
-    { { 1, 1,-1}, {1, 0, 2} },
-    { { 1,-1,-1}, {0, 1, 2} },
-    { {-1,-1,-1}, {1, 0, 2} },      
-
-};
-struct hwmsen_convert cvt;
-static sensors_event_t mAccelEvent;
-static sensors_event_t mMagneticEvent;
-static int direction = 0;
-static int OTP[2] = {0};
-
-float mag_raw[3] = {0};
-
-static char *sys_input_layout = "/sys/class/misc/msensor/mag_layout";
-static char *sys_input_otp = "/sys/class/misc/msensor/mag_otp";
-
 static int convert_magnetic(sensors_event_t *raw, sensors_event_t *result,
 		struct sensor_algo_args *args)
-{	
-	D("convert_magnetic mag[%f %f %f]\n",raw->magnetic.x,raw->magnetic.y,raw->magnetic.z);
-	
-	raw->magnetic.z = raw->magnetic.z - 0.02*OTP[0]*raw->magnetic.x - 0.02*OTP[1]*raw->magnetic.y;
-	mag_raw[0] = raw->magnetic.x;
-	mag_raw[1] = raw->magnetic.y;
-	mag_raw[2] = raw->magnetic.z;
-	
-	//translate coordinate axis
-	mMagneticEvent.magnetic.x = (cvt.sign[0]*mag_raw[cvt.map[0]]) * scalar;
-	mMagneticEvent.magnetic.y = (cvt.sign[1]*mag_raw[cvt.map[1]]) * scalar;
-	mMagneticEvent.magnetic.z = (cvt.sign[2]*mag_raw[cvt.map[2]]) * scalar;
-	
-	process(&mMagneticEvent);
-
-	result->magnetic.x = mMagneticEvent.magnetic.x/scalar2uT;
-	result->magnetic.y = mMagneticEvent.magnetic.y/scalar2uT;
-	result->magnetic.z = mMagneticEvent.magnetic.z/scalar2uT;
-	result->magnetic.status = mMagneticEvent.magnetic.status;
-	
-	D("convert_magnetic result->x=%f,result->y=%f,result->z=%f\n",result->magnetic.x,result->magnetic.y,result->magnetic.z);
+{
+	ALOGD("convert_magnetic mag[%f %f %f]\n",raw->magnetic.x,raw->magnetic.y,raw->magnetic.z);
+	QMC_CalibMagProcess(raw,result);
+	ALOGD("convert_magnetic calib_Mag,%f,%f,%f\n",result->magnetic.x,result->magnetic.y,result->magnetic.z);
 	
 	return 0;
 }
 
-static int convert_orientation(sensors_event_t *raw, sensors_event_t *result,
+static int get_orientation(sensors_event_t *raw, sensors_event_t *result,
 		struct sensor_algo_args *args)
-{	
-	if (raw->type == SENSOR_TYPE_ACCELEROMETER) {
-		mAccelEvent.acceleration.x = raw->acceleration.x;
-		mAccelEvent.acceleration.y = raw->acceleration.y;
-		mAccelEvent.acceleration.z = raw->acceleration.z;
-	}
-	D("convert_orientation acc[%f %f %f]\n",raw->acceleration.x,raw->acceleration.y,raw->acceleration.z);
-	if (raw->type == SENSOR_TYPE_MAGNETIC_FIELD) {
-		mMagneticEvent.magnetic.x = raw->magnetic.x;
-		mMagneticEvent.magnetic.y = raw->magnetic.y;
-		mMagneticEvent.magnetic.z = raw->magnetic.z;
-	}
-	D("convert_orientation mag[%f %f %f]\n",raw->magnetic.x,raw->magnetic.y,raw->magnetic.z);
-	
-	QMCD_GetSensorsData(&mMagneticEvent, &mAccelEvent, NULL, NULL, result, NULL, NULL);
-
-	D("convert_orientation result->x=%f,result->y=%f,result->z=%f\n",result->orientation.azimuth,result->orientation.pitch,result->orientation.roll);
-
-	return 0;
-}
-
-#ifdef QST_VIRTUAL_SENSOR
-static int get_rotation_vector(sensors_event_t *raw, sensors_event_t *result, struct sensor_algo_args *args)
 {
-	if (raw->type == SENSOR_TYPE_ACCELEROMETER) {
-		mAccelEvent.acceleration.x = raw->acceleration.x;
-		mAccelEvent.acceleration.y = raw->acceleration.y;
-		mAccelEvent.acceleration.z = raw->acceleration.z;
-	}
-
-	if (raw->type == SENSOR_TYPE_MAGNETIC_FIELD) {
-		mMagneticEvent.magnetic.x = raw->magnetic.x;
-		mMagneticEvent.magnetic.y = raw->magnetic.y;
-		mMagneticEvent.magnetic.z = raw->magnetic.z;
-	}
-
-	QMCD_GetSensorsData(&mMagneticEvent, &mAccelEvent, NULL, result, NULL, NULL, NULL);
-	
-	D("get_rotation_vector result[%f %f %f %f]\n",result->data[0],result->data[1],result->data[2],result->data[3]);
+	QMC_ORIProcess(raw,result);
 	return 0;
 }
 
-static int get_virtual_gyro(sensors_event_t *raw, sensors_event_t *result, struct sensor_algo_args *args)
+static int get_virtual_gyro(sensors_event_t *raw, sensors_event_t *result,
+		struct sensor_algo_args *args)
 {
-	if (raw->type == SENSOR_TYPE_ACCELEROMETER) {
-		mAccelEvent.acceleration.x = raw->acceleration.x;
-		mAccelEvent.acceleration.y = raw->acceleration.y;
-		mAccelEvent.acceleration.z = raw->acceleration.z;
-	}
-
-	if (raw->type == SENSOR_TYPE_MAGNETIC_FIELD) {
-		mMagneticEvent.magnetic.x = raw->magnetic.x;
-		mMagneticEvent.magnetic.y = raw->magnetic.y;
-		mMagneticEvent.magnetic.z = raw->magnetic.z;
-	}
-
-	QMCD_GetSensorsData(&mMagneticEvent, &mAccelEvent, result, NULL, NULL, NULL, NULL);
-	
-	D("get_virtual_gyro result[%f %f %f]\n",result->data[0],result->data[1],result->data[2]);
+	QMC_GyroProcess(raw,result);
 	return 0;
 }
 
-static int get_gravity(sensors_event_t *raw, sensors_event_t *result, struct sensor_algo_args *args)
+static int get_rotation_vector(sensors_event_t *raw, sensors_event_t *result,
+		struct sensor_algo_args *args)
 {
-	if (raw->type == SENSOR_TYPE_ACCELEROMETER) {
-		mAccelEvent.acceleration.x = raw->acceleration.x;
-		mAccelEvent.acceleration.y = raw->acceleration.y;
-		mAccelEvent.acceleration.z = raw->acceleration.z;
-	}
-
-	if (raw->type == SENSOR_TYPE_MAGNETIC_FIELD) {
-		mMagneticEvent.magnetic.x = raw->magnetic.x;
-		mMagneticEvent.magnetic.y = raw->magnetic.y;
-		mMagneticEvent.magnetic.z = raw->magnetic.z;
-	}
-
-	QMCD_GetSensorsData(&mMagneticEvent, &mAccelEvent, NULL, NULL, NULL, result, NULL);
-	
-	D("get_gravity result[%f %f %f]\n",result->data[0],result->data[1],result->data[2]);
+	QMC_RVProcess(raw,result);
 	return 0;
 }
 
-static int get_la(sensors_event_t *raw, sensors_event_t *result, struct sensor_algo_args *args)
+static int get_gravity(sensors_event_t *raw, sensors_event_t *result,
+		struct sensor_algo_args *args)
 {
-	if (raw->type == SENSOR_TYPE_ACCELEROMETER) {
-		mAccelEvent.acceleration.x = raw->acceleration.x;
-		mAccelEvent.acceleration.y = raw->acceleration.y;
-		mAccelEvent.acceleration.z = raw->acceleration.z;
-	}
-
-	if (raw->type == SENSOR_TYPE_MAGNETIC_FIELD) {
-		mMagneticEvent.magnetic.x = raw->magnetic.x;
-		mMagneticEvent.magnetic.y = raw->magnetic.y;
-		mMagneticEvent.magnetic.z = raw->magnetic.z;
-	}
-
-	QMCD_GetSensorsData(&mMagneticEvent, &mAccelEvent, NULL, NULL, NULL, result, NULL);
-	
-	D("get_la result[%f %f %f]\n",result->data[0],result->data[1],result->data[2]);
+	QMC_GRAProcess(raw,result);
 	return 0;
 }
-#endif
+
+static int get_la(sensors_event_t *raw, sensors_event_t *result,
+		struct sensor_algo_args *args)
+{
+	QMC_LAProcess(raw,result);
+	return 0;
+}
 
 static int cal_init(const struct sensor_cal_module_t *module)
 {
-	int fd_layout;
-	int fd_otp;
-	int ret = 0;
-	char buf[30] = {0};
-
-	fd_layout = open(sys_input_layout,O_RDONLY);
-	if(fd_layout >= 0){
-		ret = read(fd_layout, buf, sizeof(buf));
-		if(1 == sscanf(buf,"%d",&direction)){
-			if(direction < 0)	
-			direction = 0;
-		}
-		close(fd_layout);
+	if(NULL == module)
+	{
+		ALOGD("qst call init,NULL module pointer.\n");
 	}
-	
-	memset(buf,0,sizeof(buf));
-
-	fd_otp = open(sys_input_otp,O_RDONLY);
-	if(fd_otp >= 0){
-		ret = read(fd_otp, buf, sizeof(buf));
-		sscanf(buf,"%d,%d",&OTP[0],&OTP[1]);
-		close(fd_otp);
-	}
-	if(direction > sizeof(map)/sizeof(map[0]))
-		direction = 0;
-	cvt = map[direction];
-	
-	mcal(0);
-#ifdef QST_VIRTUAL_SENSOR
-	dummyGyroInit();
-#endif
+	QMC_Init();
 	return 0;
 }
 
@@ -257,27 +126,13 @@ static int cal_get_algo_list(const struct sensor_cal_algo_t **algo)
 	return 0;
 } 
 
-static struct sensor_algo_methods_t compass_methods = {
+static struct sensor_algo_methods_t algo_methods = {
 	.convert = convert_magnetic,
+	.config = NULL,
 };
 
-static const char* compass_match_table[] = {
-	"QST-mag",
-	NULL
-};
-
-static struct sensor_algo_methods_t orientation_methods = {
-	.convert = convert_orientation,
-};
-
-static const char* orientation_match_table[] = {
-	"QST-orientation",
-	NULL
-};
-
-#ifdef QST_VIRTUAL_SENSOR
-static struct sensor_algo_methods_t rv_methods = {
-	.convert = get_rotation_vector,
+static struct sensor_algo_methods_t or_methods = {
+	.convert = get_orientation,
 	.config = NULL,
 };
 
@@ -286,7 +141,12 @@ static struct sensor_algo_methods_t pg_methods = {
 	.config = NULL,
 };
 
-static struct sensor_algo_methods_t gv_methods = {
+static struct sensor_algo_methods_t rv_methods = {
+	.convert = get_rotation_vector,
+	.config = NULL,
+};
+
+static struct sensor_algo_methods_t gr_methods = {
 	.convert = get_gravity,
 	.config = NULL,
 };
@@ -296,53 +156,55 @@ static struct sensor_algo_methods_t la_methods = {
 	.config = NULL,
 };
 
-static const char* rv_match_table[] = {
-	"QST-rotation-vector",
+static const char* mag_match_table[] = {
+	COMPASS_NAME,
+	NULL
+};
+
+static const char* or_match_table[] = {
+	ORIENTATION_NAME,
 	NULL
 };
 
 static const char* pg_match_table[] = {
-	"QST-pseudo-gyro",
+	"oem-pseudo-gyro",
 	NULL
 };
 
-static const char* gv_match_table[] = {
-	"QST-gravity",
+static const char* rv_match_table[] = {
+	"oem-rotation-vector",
+	NULL
+};
+
+static const char* gr_match_table[] = {
+	"oem-gravity",
 	NULL
 };
 
 static const char* la_match_table[] = {
-	"QST-linear-acceleration",
+	"oem-linear-acceleration",
 	NULL
 };
-#endif
 
 static struct sensor_cal_algo_t algo_list[] = {
 	{
 		.tag = SENSOR_CAL_ALGO_TAG,
 		.version = SENSOR_CAL_ALGO_VERSION,
 		.type = SENSOR_TYPE_MAGNETIC_FIELD,
-		.compatible = compass_match_table,
+		.compatible = mag_match_table,
 		.module = &SENSOR_CAL_MODULE_INFO,
-		.methods = &compass_methods,
+		.methods = &algo_methods,
 	},
 	{
 		.tag = SENSOR_CAL_ALGO_TAG,
 		.version = SENSOR_CAL_ALGO_VERSION,
 		.type = SENSOR_TYPE_ORIENTATION,
-		.compatible = orientation_match_table,
+		.compatible = or_match_table,
 		.module = &SENSOR_CAL_MODULE_INFO,
-		.methods = &orientation_methods,
+		.methods = &or_methods,
 	},
-#ifdef QST_VIRTUAL_SENSOR
-	{
-		.tag = SENSOR_CAL_ALGO_TAG,
-		.version = SENSOR_CAL_ALGO_VERSION,
-		.type = SENSOR_TYPE_ROTATION_VECTOR,
-		.compatible = rv_match_table,
-		.module = &SENSOR_CAL_MODULE_INFO,
-		.methods = &rv_methods,
-	},
+//#ifdef QMC_VIRTUAL_SENSORS
+#if 0
 	{
 		.tag = SENSOR_CAL_ALGO_TAG,
 		.version = SENSOR_CAL_ALGO_VERSION,
@@ -354,10 +216,18 @@ static struct sensor_cal_algo_t algo_list[] = {
 	{
 		.tag = SENSOR_CAL_ALGO_TAG,
 		.version = SENSOR_CAL_ALGO_VERSION,
-		.type = SENSOR_TYPE_GRAVITY,
-		.compatible = gv_match_table,
+		.type = SENSOR_TYPE_ROTATION_VECTOR,
+		.compatible = rv_match_table,
 		.module = &SENSOR_CAL_MODULE_INFO,
-		.methods = &gv_methods,
+		.methods = &rv_methods,
+	},
+	{
+		.tag = SENSOR_CAL_ALGO_TAG,
+		.version = SENSOR_CAL_ALGO_VERSION,
+		.type = SENSOR_TYPE_GRAVITY,
+		.compatible = gr_match_table,
+		.module = &SENSOR_CAL_MODULE_INFO,
+		.methods = &gr_methods,
 	},
 	{
 		.tag = SENSOR_CAL_ALGO_TAG,
@@ -366,8 +236,8 @@ static struct sensor_cal_algo_t algo_list[] = {
 		.compatible = la_match_table,
 		.module = &SENSOR_CAL_MODULE_INFO,
 		.methods = &la_methods,
-	},	
-#endif		
+	},
+#endif
 };
 
 static struct sensor_cal_methods_t cal_methods = {

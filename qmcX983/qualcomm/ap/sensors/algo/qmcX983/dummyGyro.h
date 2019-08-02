@@ -1,5 +1,7 @@
-#ifndef PSEUDO_GRYO_H
-#define PSEUDO_GRYO_H
-void dummyGyroInit(void);
-void QST_fussion_PG(float *mag,float *acc, int *pg_out);
-#endif 
+#ifndef QMC_VIRTUAL_GYRO_H
+#define QMC_VIRTUAL_GYRO_H
+void dummyGyroInit();
+void process_PG(float mag[],float acc[], int pg_out[]);
+#endif
+
+
