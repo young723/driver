@@ -1,0 +1,9 @@
+
+config MTK_QMC6308
+	tristate "QMC6308 for MediaTek package"
+	default n
+	help
+	  It support different magnetometer sensor.
+	  If this option is set, it will support
+	  QMC6308 magnetometer which is a 3-axis electronic
+	  compass IC with high sensitive Hall sensor technology.
