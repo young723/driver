@@ -535,7 +535,7 @@ static int qmaX981_get_chip_id(void)
 		QMAX981_LOG("qma6981 find \n");
 		qmaX981->chip_type = CHIP_TYPE_QMA6981;
 	}
-	else if((qmaX981->chip_id>=0xe0) && (qmaX981->chip_id<=0xe6))
+	else if((qmaX981->chip_id>=0xe0) && (qmaX981->chip_id<=0xe9))
 	{
 		QMAX981_LOG("qma7981 find \n");
 		qmaX981->chip_type = CHIP_TYPE_QMA7981;

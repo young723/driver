@@ -9,9 +9,10 @@
 #define QMP6988_ERR(fmt, args...) 		pr_err(QMP6988_TAG"%s %d : "fmt, __func__, __LINE__, ##args)
 #define QMP6988_LOG(fmt, args...)    	pr_err(QMP6988_TAG fmt, ##args)
 
+//#define QMP6988_PLATFORM_KK
 #define QMP6988_CREATE_MISC_DEVICE
-#define QMP6988_DEV_NAME        "qmp6988"
-#define QMP6988_BUFSIZE			96
+#define QMP6988_DEV_NAME        		"qmp6988"
+#define QMP6988_BUFSIZE					96
 
 #define QMP6988_CHIP_ID_REG						0xD1
 #define QMP6988_RESET_REG             			0xE0  /* Device reset register */
@@ -58,7 +59,7 @@
 #define QMP6988_S16_t short
 #define QMP6988_U32_t unsigned int
 #define QMP6988_S32_t int
-#define QMP6988_S64_t long
+#define QMP6988_S64_t long long
 
 struct qmp6988_calibration_data 
 {
@@ -92,18 +93,16 @@ typedef enum
 #define BROMETER							0X87
 #endif
 
-#define BAROMETER_GET_CALI					_IOR(BROMETER, 0x06, struct qmp6988_calibration_data)
+#define BAROMETER_GET_CALI						_IOR(BROMETER, 0x06, struct qmp6988_calibration_data)
 #ifndef BAROMETER_IOCTL_READ_CHIPINFO
-#define BAROMETER_IOCTL_READ_CHIPINFO				_IOR(BROMETER, 0x04, int)
+#define BAROMETER_IOCTL_READ_CHIPINFO			_IOR(BROMETER, 0x04, int)
 #endif
 
 #ifdef CONFIG_COMPAT
-
-#define COMPAT_BAROMETER_GET_CALI			_IOR(BROMETER, 0x06, struct qmp6988_calibration_data)
+#define COMPAT_BAROMETER_GET_CALI				_IOR(BROMETER, 0x06, struct qmp6988_calibration_data)
 #ifndef COMPAT_BAROMETER_IOCTL_READ_CHIPINFO
-#define COMPAT_BAROMETER_IOCTL_READ_CHIPINFO		_IOR(BROMETER, 0x04, compat_int_t)
+#define COMPAT_BAROMETER_IOCTL_READ_CHIPINFO	_IOR(BROMETER, 0x04, compat_int_t)
 #endif
-
 #endif
 
 #endif/* QST_QMP6988_H */

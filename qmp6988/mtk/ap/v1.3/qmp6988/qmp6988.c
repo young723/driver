@@ -21,6 +21,7 @@
 
 typedef struct qmp6988_data
 {
+	int init_flag;
 	int power_mode;
 	int p_oversampling;
 	int t_oversampling;
@@ -37,7 +38,6 @@ static int qmp6988_local_init(void);
 static int qmp6988_remove(void);
 static int qmp6988_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id);
 static int qmp6988_i2c_remove(struct i2c_client *client);
-
 static int qmp6988_get_data(int *value, int *status);
 
 static int qmp6988_init_flag = -1;
@@ -196,7 +196,6 @@ static int qmp6988_get_calibration_data(void)
 		| (((QMP6988_U32_t)buf_wr[24] & 0xf0) >> SHIFT_RIGHT_4_POSITION))<<12);
 	qmp6988_cali.COE_b00 = qmp6988_cali.COE_b00>>12;
 
-
 	qmp6988_cali.COE_bt1 = (QMP6988_S16_t)(((QMP6988_U16_t)buf_wr[2] << SHIFT_LEFT_8_POSITION) | buf_wr[3]);
 	qmp6988_cali.COE_bt2 = (QMP6988_S16_t)(((QMP6988_U16_t)buf_wr[4] << SHIFT_LEFT_8_POSITION) | buf_wr[5]);
 	qmp6988_cali.COE_bp1 = (QMP6988_S16_t)(((QMP6988_U16_t)buf_wr[6] << SHIFT_LEFT_8_POSITION) | buf_wr[7]);
@@ -309,7 +308,8 @@ static QMP6988_S16_t qmp6988_convTx_02e(QMP6988_S32_t dt)
 	wk1 = ((QMP6988_S64_t)a1 * (QMP6988_S64_t)dt); // 31Q23+24-1=54 (54Q23)
 	wk2 = ((QMP6988_S64_t)a2 * (QMP6988_S64_t)dt) >> 14; // 30Q47+24-1=53 (39Q33)
 	wk2 = (wk2 * (QMP6988_S64_t)dt) >> 10; // 39Q33+24-1=62 (52Q23)
-	wk2 = ((wk1 + wk2) / 32767) >> 19; // 54,52->55Q23 (20Q04)
+	//wk2 = ((wk1 + wk2) / 32767) >> 19; // 54,52->55Q23 (20Q04)
+	wk2 = ((wk1 + wk2)>>15) >> 19; // 54,52->55Q23 (20Q04),  yang
 	ret = (QMP6988_S16_t)((a0 + wk2) >> 4); // 21Q4 -> 17Q0
 	return ret;
 }
@@ -346,7 +346,8 @@ static QMP6988_S32_t qmp6988_get_pressure_02e( QMP6988_S32_t dp, QMP6988_S16_t t
 	wk2 = (wk2 * (QMP6988_S64_t)dp); // 39Q30+24-1=62 (62Q30)
 	wk3 += wk2; // 62,62->63Q30
 	wk1 += wk3 >> 15; // Q30 >> 15 = Q15
-	wk1 /= 32767L;
+	//wk1 /= 32767L;	// yang
+	wk1 = wk1>>15;
 	wk1 >>= 11; // Q15 >> 7 = Q4
 	wk1 += b00; // Q4 + 20Q4
 	//wk1 >>= 4; // 28Q4 -> 24Q0
@@ -384,8 +385,13 @@ static int qmp6988_read_raw_data(s32 *temp, s32 *press)
 	T_int = (QMP6988_S16_t)qmp6988_convTx_02e(T_read);
 	P_int = (QMP6988_S32_t)qmp6988_get_pressure_02e(P_read, T_int);
 
-	*temp = T_int*100/256;	//T_read;
-	*press = P_int*100/16;	//P_read;
+	//*temp = (s32)(T_int*100/256);	//T_read;
+	//*press = (s32)(P_int*100/16);	//P_read;
+	//T_int = T_int>>8;
+	//P_int = P_int>>4;
+
+	*temp = (T_int)>>8;
+	*press = (P_int)>>4;
 
 	if(g_qmp6988->power_mode == QMP6988_FORCED_MODE)
 	{	
@@ -437,14 +443,18 @@ void qmp6988_set_app(qmp6988_app_e app)
 
 static int qmp6988_init_client(void)
 {
+	if(g_qmp6988->init_flag == 1)
+		return 0;
+
 	if(qmp6988_get_chip_type())
 	{
 		QMP6988_ERR("qmp6988_get_chip_type fail!");
 		return -1;
 	}
 	qmp6988_get_calibration_data();
-	qmp6988_set_powermode(g_qmp6988->power_mode);
-	qmp6988_set_app(QMP6988_APP_WEATHER_REPORT);
+	qmp6988_set_powermode(QMP6988_SLEEP_MODE);
+	qmp6988_set_app(QMP6988_APP_ElEVATOR_DETECTION);
+	g_qmp6988->init_flag = 1;
 	
 	return 0;
 }
@@ -454,6 +464,26 @@ static int qmp6988_do_selftest(void)
 	int err = 0;
 
 	return err;
+}
+
+static ssize_t show_init_value(struct device_driver *ddri, char *buf)
+{
+	int err = 0;
+
+	if(g_qmp6988 == NULL)
+	{
+		QMP6988_ERR("i2c data pointer is null\n");
+		return 0;
+	}
+	g_qmp6988->client->addr = 0x70;
+	err = qmp6988_init_client();
+	if(err)
+	{
+		g_qmp6988->client->addr = 0x56;
+		err = qmp6988_init_client();
+	}
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", g_qmp6988->init_flag);
 }
 
 static ssize_t show_chipinfo_value(struct device_driver *ddri, char *buf)
@@ -478,7 +508,7 @@ static ssize_t show_sensordata_value(struct device_driver *ddri, char *buf)
 	}
 
 	qmp6988_read_raw_data(&temp, &press);
-	return snprintf(buf, PAGE_SIZE, "%d.%d %d.%d\n", press/100, press%100, temp/100, temp%100);
+	return snprintf(buf, PAGE_SIZE, "%d %d\n", press, temp);
 }
 
 static ssize_t show_trace_value(struct device_driver *ddri, char *buf)
@@ -537,6 +567,8 @@ static ssize_t show_dumpinfo_value(struct device_driver *ddri, char *buf)
 	}
 	
 	write_offset = 0;
+	res = qmp6988_i2c_read_block(g_qmp6988->client, QMP6988_CHIP_ID_REG, &reg_value, 1);
+	write_offset += snprintf(buf+write_offset, PAGE_SIZE-write_offset, "0x%2x=0x%2x\n", QMP6988_CHIP_ID_REG, reg_value);
 	for(i =QMP6988_CONFIG_REG;i<=QMP6988_IO_SETUP_REG;i++)
 	{
 		res = qmp6988_i2c_read_block(g_qmp6988->client, (u8)i, &reg_value, 1);
@@ -584,6 +616,7 @@ static ssize_t show_calidata_value(struct device_driver *ddri, char *buf)
 }
 
 
+static DRIVER_ATTR(init, S_IRUGO, show_init_value, NULL);
 static DRIVER_ATTR(chipinfo, S_IRUGO, show_chipinfo_value, NULL);
 static DRIVER_ATTR(sensordata, S_IRUGO, show_sensordata_value, NULL);
 static DRIVER_ATTR(trace, S_IWUSR | S_IRUGO, show_trace_value, store_trace_value);
@@ -592,6 +625,7 @@ static DRIVER_ATTR(dumpinfo, S_IRUGO, show_dumpinfo_value, NULL);
 static DRIVER_ATTR(calidata, S_IRUGO, show_calidata_value, NULL);
 
 static struct driver_attribute *qmp6988_attr_list[] = {
+	&driver_attr_init,			/* chip information */
 	&driver_attr_chipinfo,		/* chip information */
 	&driver_attr_sensordata,	/* dump sensor data */
 	&driver_attr_trace,			/* trace log */
@@ -627,10 +661,10 @@ static int qmp6988_delete_attr(struct device_driver *driver)
 	int idx, err = 0;
 	int num = (int)(ARRAY_SIZE(qmp6988_attr_list));
 
-	if (driver == NULL)
+	if(driver == NULL)
 		return -EINVAL;
 
-	for (idx = 0; idx < num; idx++)
+	for(idx = 0; idx < num; idx++)
 	{
 		driver_remove_file(driver, qmp6988_attr_list[idx]);
 	}
@@ -644,7 +678,7 @@ static int qmp6988_open(struct inode *inode, struct file *file)
 {
 	file->private_data = g_qmp6988;
 
-	if (file->private_data == NULL) {
+	if(file->private_data == NULL) {
 		QMP6988_ERR("null pointer\n");
 		return -EINVAL;
 	}
@@ -671,7 +705,7 @@ static long qmp6988_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned
 	else if (_IOC_DIR(cmd) & _IOC_WRITE)
 		err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
 
-	QMP6988_ERR("access error: %08X, (%2d, %2d)\n", cmd, _IOC_DIR(cmd), _IOC_SIZE(cmd));
+	QMP6988_LOG("qmp6988_unlocked_ioctl: %08X, (%2d, %2d)\n", cmd, _IOC_DIR(cmd), _IOC_SIZE(cmd));
 	if(err) {
 		return -EFAULT;
 	}
@@ -789,113 +823,19 @@ static struct miscdevice qmp6988_device = {
 };
 #endif
 
-#if 0
-static int qmp6988_sensor_open(struct inode *inode, struct file *file)
-{
-	nonseekable_open(inode, file);
-	return 0;
-}
-
-static int qmp6988_sensor_release(struct inode *inode, struct file *file)
-{
-	file->private_data = NULL;
-	return 0;
-}
-
-static long qmp6988_sensor_unlocked_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	//qmp6988_data_t *obj = (qmp6988_data_t *)file->private_data;
-	//struct i2c_client *client = obj->client;
-	char strbuf[QMP6988_BUFSIZE];
-	void __user *data;
-	int err = 0;
-//	int temp, press;
-
-	if (_IOC_DIR(cmd) & _IOC_READ)
-		err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
-	else if (_IOC_DIR(cmd) & _IOC_WRITE)
-		err = !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
-
-	QMP6988_ERR("access error: %08X, (%2d, %2d)\n", cmd, _IOC_DIR(cmd), _IOC_SIZE(cmd));
-	if(err) {
-		return -EFAULT;
-	}
-
-	switch(cmd) {
-	case BAROMETER_IOCTL_INIT:
-		err = qmp6988_init_client();
-		if (err) {
-			err = -EFAULT;
-			break;
-		}
-		break;
-
-	case BAROMETER_IOCTL_READ_CHIPINFO:
-		data = (void __user *)arg;
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-		memset(strbuf, 0, sizeof(strbuf));
-		strlcpy(strbuf, "qmp6988", sizeof(strbuf));
-		if (copy_to_user(data, strbuf, strlen(strbuf) + 1)) {
-			err = -EFAULT;
-			break;
-		}
-		break;
-
-	case BAROMETER_GET_CALI:
-		data = (void __user *)arg;
-		QMP6988_LOG("IOCTL BAROMETER_GET_CALI\n");
-		if (data == NULL) {
-			err = -EINVAL;
-			break;
-		}
-		if(copy_to_user(data, &qmp6988_cali, sizeof(struct qmp6988_calibration_data))) {
-			err = -EFAULT;
-			break;
-		}
-
-	default:
-		QMP6988_ERR("unknown IOCTL: 0x%08x\n", cmd);
-		err = -ENOIOCTLCMD;
-		break;
-	}
-
-	return err;
-}
-
-
-
-static const struct file_operations qmp6988_sensor_fops = {
-	.owner = THIS_MODULE,
-	.open = qmp6988_sensor_open,
-	.release = qmp6988_sensor_release,
-	.unlocked_ioctl = qmp6988_sensor_unlocked_ioctl,
-};
-
-static struct sensor_attr_t qmp6988_sensor_dev = 
-{
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "qmp6988_sensor",
-	.fops = &qmp6988_sensor_fops,
-};
-#endif
-
-
-#ifdef CONFIG_PM_SLEEP
+#if 1 //def CONFIG_PM_SLEEP
 static int qmp6988_suspend(struct device *dev)
 {
 	int err = 0;
-	//struct i2c_client *client = to_i2c_client(dev);
-	//struct qmp6988_i2c_data *obj = i2c_get_clientdata(client);
-	QMP6988_FUN();
+
+	QMP6988_LOG("qmp6988_suspend");
 	if(g_qmp6988 == NULL)
 	{
 		QMP6988_ERR("null pointer\n");
 		return -EINVAL;
 	}
-	atomic_set(&g_qmp6988->suspend, 1);
+	atomic_set(&g_qmp6988->suspend, 1);	
+	qmp6988_set_powermode(QMP6988_SLEEP_MODE);
 
 	return err;
 }
@@ -903,16 +843,15 @@ static int qmp6988_suspend(struct device *dev)
 static int qmp6988_resume(struct device *dev)
 {
 	int err=0;
-	//struct i2c_client *client = to_i2c_client(dev);
-	//struct qmp6988_i2c_data *obj = i2c_get_clientdata(client);
 
-	QMP6988_FUN();
+	QMP6988_LOG("qmp6988_resume");
 	if(g_qmp6988 == NULL)
 	{
 		QMP6988_ERR("null pointer\n");
 		return -EINVAL;
 	}
 	atomic_set(&g_qmp6988->suspend, 0);
+	qmp6988_set_powermode(g_qmp6988->power_mode);
 
 	return err;
 }
@@ -957,7 +896,6 @@ static int qmp6988_enable_nodata(int en)
 
 	return 0;
 }
-
 
 static int qmp6988_set_delay(u64 ns)
 {
@@ -1162,8 +1100,8 @@ static int qmp6988_i2c_probe(struct i2c_client *client, const struct i2c_device_
 
 	atomic_set(&g_qmp6988->trace, 0);
 	atomic_set(&g_qmp6988->suspend, 0);
-	g_qmp6988->power_mode = QMP6988_FORCED_MODE;
-	g_qmp6988->iir_filter = QMP6988_FILTERCOEFF_OFF;
+	g_qmp6988->power_mode = QMP6988_NORMAL_MODE;
+	g_qmp6988->iir_filter = QMP6988_FILTERCOEFF_2;
 	g_qmp6988->p_oversampling = QMP6988_OVERSAMPLING_16X;
 	g_qmp6988->t_oversampling = QMP6988_OVERSAMPLING_2X;
 
@@ -1207,6 +1145,7 @@ static int qmp6988_i2c_probe(struct i2c_client *client, const struct i2c_device_
 		goto exit_create_attr_failed;
 	}
 
+
 	ctl.is_use_common_factory = false;
 	ctl.open_report_data = qmp6988_open_report_data;
 	ctl.enable_nodata = qmp6988_enable_nodata;
@@ -1215,6 +1154,7 @@ static int qmp6988_i2c_probe(struct i2c_client *client, const struct i2c_device_
 	ctl.flush = qmp6988_flush;
 	ctl.is_report_input_direct = false;
 	ctl.is_support_batch = obj->hw.is_batch_supported;
+
 	err = baro_register_control_path(&ctl);
 	if(err)
 	{
@@ -1226,7 +1166,7 @@ static int qmp6988_i2c_probe(struct i2c_client *client, const struct i2c_device_
 #if defined(QMP6988_GET_DATA_2)
 	data.get_data_2 = qmp6988_get_data2;
 #endif
-	data.vender_div = 100*100;	//16;
+	data.vender_div = 100;	//16;
 	err = baro_register_data_path(&data);
 	if(err)
 	{
