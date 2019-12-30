@@ -836,7 +836,7 @@ static int qmp6988_suspend(struct device *dev)
 		return -EINVAL;
 	}
 	atomic_set(&g_qmp6988->suspend, 1);
-
+    qmp6988_set_powermode(QMP6988_SLEEP_MODE);//cxg
 	return err;
 }
 
@@ -853,7 +853,7 @@ static int qmp6988_resume(struct device *dev)
 		return -EINVAL;
 	}
 	atomic_set(&g_qmp6988->suspend, 0);
-
+    qmp6988_set_powermode(QMP6988_NORMAL_MODE);//cxg
 	return err;
 }
 #endif
@@ -1102,7 +1102,7 @@ static int qmp6988_i2c_probe(struct i2c_client *client, const struct i2c_device_
 
 	atomic_set(&g_qmp6988->trace, 0);
 	atomic_set(&g_qmp6988->suspend, 0);
-	g_qmp6988->power_mode = QMP6988_FORCED_MODE;
+	g_qmp6988->power_mode = QMP6988_NORMAL_MODE;//cxg
 	g_qmp6988->iir_filter = QMP6988_FILTERCOEFF_OFF;
 	g_qmp6988->p_oversampling = QMP6988_OVERSAMPLING_16X;
 	g_qmp6988->t_oversampling = QMP6988_OVERSAMPLING_2X;
