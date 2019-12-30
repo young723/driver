@@ -166,8 +166,6 @@ kal_bool gsensor_i2c_write_byte(kal_uint8 ucBufferIndex, kal_uint8 pucData)
 {
 #if defined(USE_QST_SW_IIC)
 	return qst_sw_writereg(QMAX981_SLAVE_ADDR, ucBufferIndex, pucData);
-#elif defined(USE_MTK_SW_IIC)
-	return qst_write_byte(QMAX981_SLAVE_ADDR, ucBufferIndex, pucData);
 #else
     return ms_i2c_send(QMAX981_SLAVE_ADDR, ucBufferIndex, &pucData, 1);
 #endif
@@ -179,8 +177,6 @@ kal_bool gsensor_i2c_read_bytes(kal_uint8 reg_no, kal_uint8* buffer_name, kal_ui
 {
 #if defined(USE_QST_SW_IIC)
 	return qst_sw_readreg(QMAX981_SLAVE_ADDR, reg_no, buffer_name, length);
-#elif defined(USE_MTK_SW_IIC)
-	return qst_read_bytes(QMAX981_SLAVE_ADDR, reg_no, buffer_name, length);
 #else
 	return ms_i2c_receive(QMAX981_SLAVE_ADDR, reg_no, buffer_name, length);
 #endif
@@ -1056,9 +1052,6 @@ static kal_bool qma7981_custom_init(void)
 // read reg
 	
 #if defined(QMAX981_STEPCOUNTER)
-	reg_0x10 = 0xe1;
-	reg_0x11 = 0x80;
-
 	if(reg_0x11 == 0x80)		// 500K
 	{
 		reg_0x14 = (((STEP_W_TIME_L*100)/771)+1);		// 0xe1 odr 129.7hz, 7.71ms
@@ -1130,7 +1123,7 @@ static kal_bool qma7981_custom_init(void)
 	QMAX981_INFO(MOD_MATV,"0x14[%d] 0x15[%d] \n", reg_0x14, reg_0x15);
 	gsensor_i2c_write_byte(0x12, 0x94);
 	gsensor_i2c_write_byte(0x13, 0x80);		// clear step
-	gsensor_i2c_write_byte(0x13, 0x01);		// 0x7f(1/16) 0x00(1/8)
+	gsensor_i2c_write_byte(0x13, 0x7f);		// 0x7f(1/16) 0x00(1/8)
 	gsensor_i2c_write_byte(0x14, reg_0x14);		// STEP_TIME_LOW<7:0>*(1/ODR) 
 	gsensor_i2c_write_byte(0x15, reg_0x15);		// STEP_TIME_UP<7:0>*8*(1/ODR) 
 
